@@ -1,0 +1,132 @@
+.app {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+header h1 {
+  margin-bottom: 0.5rem;
+}
+
+header p {
+  color: #666;
+}
+
+.preferences-section,
+.actions-section,
+.results-section {
+  margin-bottom: 2rem;
+}
+
+.preferences-display {
+  margin-top: 1rem;
+  text-align: left;
+}
+
+.preferences-display pre {
+  background: #f5f5f5;
+  padding: 1rem;
+  border-radius: 4px;
+  white-space: pre-wrap;
+  margin-top: 0.5rem;
+}
+
+.preferences-edit {
+  margin-top: 1rem;
+}
+
+.preferences-edit textarea {
+  width: 100%;
+  padding: 0.5rem;
+  font-family: monospace;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  margin-top: 0.5rem;
+}
+
+.preferences-edit button {
+  margin-right: 0.5rem;
+  margin-top: 1rem;
+}
+
+button {
+  padding: 0.5rem 1rem;
+  background: #007bff;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #0056b3;
+}
+
+button:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
+
+.update-button {
+  font-size: 1.1rem;
+  padding: 0.75rem 1.5rem;
+}
+
+.last-updated {
+  margin-top: 0.5rem;
+  color: #666;
+  font-size: 0.9rem;
+}
+
+.company-section {
+  margin-bottom: 2rem;
+  border: 1px solid #ddd;
+  padding: 1rem;
+  border-radius: 4px;
+}
+
+.company-section h3 {
+  margin-top: 0;
+  color: #333;
+}
+
+.no-jobs {
+  color: #666;
+  font-style: italic;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 1rem;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 0.75rem;
+  border-bottom: 1px solid #ddd;
+}
+
+th {
+  background: #f5f5f5;
+  font-weight: bold;
+}
+
+tr:hover {
+  background: #f9f9f9;
+}
+
+a {
+  color: #007bff;
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
