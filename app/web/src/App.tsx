@@ -17,6 +17,11 @@ interface Job {
 interface JobsData {
   jobs: Job[];
   lastUpdated: string | null;
+  stats?: {
+    totalScraped: number;
+    totalMatched: number;
+    scrapingTimeMs: number;
+  };
 }
 
 interface Preferences {
@@ -158,13 +163,42 @@ function App() {
 
       <section className="results-section">
         <h2>Job Results</h2>
+        {jobsData.stats && (
+          <p className="stats-summary">
+            Total: {jobsData.stats.totalScraped} jobs scraped, {jobsData.stats.totalMatched} matched
+          </p>
+        )}
         {companies.map(company => {
           const companyJobs = jobsByCompany[company] || [];
+          const matchedCount = companyJobs.filter(job => job.matched).length;
+          const totalCount = companyJobs.length;
+
+          // Company career page URLs
+          const careerUrls: Record<string, string> = {
+            'Anthropic': 'https://boards.greenhouse.io/anthropic',
+            'OpenAI': 'https://openai.com/careers/search',
+            'Amazon': 'https://www.amazon.jobs/en/search?base_query=software+engineer',
+            'Stripe': 'https://stripe.com/jobs/search',
+            'Apple': 'https://jobs.apple.com/en-us/search?team=apps-and-frameworks-SFTWR-AF+cloud-and-infrastructure-SFTWR-CLD',
+            'Databricks': 'https://databricks.com/company/careers',
+            'Glean': 'https://glean.com/careers',
+            'Google': 'https://careers.google.com/jobs/results/?q=software%20engineer',
+            'Meta': 'https://www.metacareers.com/jobs?q=software%20engineer',
+            'Sentry': 'https://sentry.io/careers/'
+          };
+
           return (
             <div key={company} className="company-section" data-company={company}>
-              <h3>{company}</h3>
+              <h3>
+                {company} ({matchedCount}/{totalCount})
+                {careerUrls[company] && (
+                  <a href={careerUrls[company]} target="_blank" rel="noopener noreferrer" className="source-link">
+                    🔗 Source
+                  </a>
+                )}
+              </h3>
               {companyJobs.length === 0 ? (
-                <p className="no-jobs">No matching jobs found for {company}</p>
+                <p className="no-jobs">No jobs found for {company}</p>
               ) : (
                 <table>
                   <thead>
@@ -172,21 +206,23 @@ function App() {
                       <th>Title</th>
                       <th>Team</th>
                       <th>Location</th>
-                      <th>Posted</th>
-                      <th>Match Score</th>
-                      <th>Snippet</th>
+                      <th>Match</th>
                       <th>Link</th>
                     </tr>
                   </thead>
                   <tbody>
                     {companyJobs.map(job => (
-                      <tr key={job.id}>
+                      <tr key={job.id} className={job.matched ? 'matched' : 'unmatched'}>
                         <td>{job.title}</td>
                         <td>{job.team || '-'}</td>
                         <td>{job.location || '-'}</td>
-                        <td>{job.posted || '-'}</td>
-                        <td>{job.matchScore ? job.matchScore.toFixed(2) : '-'}</td>
-                        <td>{job.snippet || '-'}</td>
+                        <td>
+                          {job.matched ? (
+                            <span className="match-badge">✓ {(job.matchScore! * 100).toFixed(0)}%</span>
+                          ) : (
+                            <span className="no-match">-</span>
+                          )}
+                        </td>
                         <td>
                           <a href={job.url} target="_blank" rel="noopener noreferrer">
                             View

@@ -130,3 +130,57 @@ a {
 a:hover {
   text-decoration: underline;
 }
+
+/* Stats summary */
+.stats-summary {
+  background: #e3f2fd;
+  padding: 1rem;
+  border-radius: 4px;
+  margin-bottom: 1.5rem;
+  font-weight: 500;
+  color: #1976d2;
+}
+
+/* Source link */
+.source-link {
+  margin-left: 1rem;
+  font-size: 0.9rem;
+  font-weight: normal;
+  color: #666;
+}
+
+.source-link:hover {
+  color: #007bff;
+}
+
+/* Match badges */
+.match-badge {
+  background: #4caf50;
+  color: white;
+  padding: 0.25rem 0.5rem;
+  border-radius: 3px;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.no-match {
+  color: #999;
+}
+
+/* Matched/unmatched rows */
+tr.matched {
+  background-color: #f1f8f4;
+}
+
+tr.matched:hover {
+  background-color: #e8f5e9;
+}
+
+tr.unmatched {
+  opacity: 0.6;
+}
+
+tr.unmatched:hover {
+  background-color: #fafafa;
+  opacity: 0.8;
+}
