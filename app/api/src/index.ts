@@ -315,8 +315,8 @@ function validateAndSanitizeJob(job: any, company: string): Job | null {
   }
 }
 
-// Generic Greenhouse scraper with enhanced error handling
-async function scrapeGreenhouse(companySlug: string, companyName: string, limit: number = 50): Promise<Job[]> {
+// Generic Greenhouse scraper with enhanced error handling and pagination support
+async function scrapeGreenhouse(companySlug: string, companyName: string, limit: number = 500): Promise<Job[]> {
   return withRetry(
     async () => {
       const controller = new AbortController();
@@ -324,7 +324,7 @@ async function scrapeGreenhouse(companySlug: string, companyName: string, limit:
 
       try {
         const response = await fetch(
-          `https://boards-api.greenhouse.io/v1/boards/${companySlug}/jobs`,
+          `https://boards-api.greenhouse.io/v1/boards/${companySlug}/jobs?per_page=${limit}`,
           { signal: controller.signal }
         );
 
@@ -350,7 +350,9 @@ async function scrapeGreenhouse(companySlug: string, companyName: string, limit:
           return [];
         }
 
-        const rawJobs = data.jobs.slice(0, limit).map((job: any) => ({
+        console.log(`${companyName}: Fetched ${data.jobs.length} jobs from Greenhouse API`);
+
+        const rawJobs = data.jobs.map((job: any) => ({
           id: `${companySlug}-${job.id}`,
           company: companyName,
           title: job.title,
@@ -392,7 +394,7 @@ async function scrapeGreenhouseCompanies(): Promise<Job[]> {
   ];
 
   const results = await Promise.all(
-    companies.map(c => scrapeGreenhouse(c.slug, c.name, 30))
+    companies.map(c => scrapeGreenhouse(c.slug, c.name)) // Use default limit of 500
   );
 
   return results.flat();
@@ -435,39 +437,102 @@ async function withBrowser<T>(
 }
 
 // OpenAI scraper with enhanced error handling
-async function scrapeOpenAI(limit: number = 30): Promise<Job[]> {
+async function scrapeOpenAI(limit: number = 500): Promise<Job[]> {
   return withRetry(
     async () => {
       return withBrowser(async (browser, page) => {
         try {
-          await page.goto('https://openai.com/careers/search', {
-            waitUntil: 'load',
+          console.log('OpenAI: Navigating to careers page...');
+          await page.goto('https://openai.com/careers/search/', {
+            waitUntil: 'networkidle',
             timeout: 60000
           });
 
           console.log('OpenAI: Waiting for content to render...');
           await page.waitForTimeout(15000);
 
-          // Try to find job listings
-          const jobs = await page.$$eval('a', (links: HTMLAnchorElement[]) => {
-            const results: any[] = [];
-            links.forEach(link => {
-              const title = link.textContent?.trim() || '';
-              const url = link.href;
+          // Scroll to bottom to trigger lazy loading
+          console.log('OpenAI: Scrolling to load all jobs...');
+          await page.evaluate(async () => {
+            await new Promise<void>((resolve) => {
+              let totalHeight = 0;
+              const distance = 500;
+              const timer = setInterval(() => {
+                const scrollHeight = document.documentElement.scrollHeight;
+                window.scrollBy(0, distance);
+                totalHeight += distance;
 
-              const hasJobKeywords = title.toLowerCase().match(/(engineer|developer|architect|scientist|manager|director|analyst)/);
-              const isCareerLink = url.includes('/careers/') && url.length > 30;
-              const notNavLink = !title.toLowerCase().match(/(home|about|search|skip|chatgpt|sora|api platform)/);
-
-              if (hasJobKeywords && isCareerLink && notNavLink && title.length > 15) {
-                results.push({ title, url });
-              }
+                if (totalHeight >= scrollHeight) {
+                  clearInterval(timer);
+                  resolve();
+                }
+              }, 200);
             });
-            return results;
           });
 
+          // Wait for any additional content to load
+          await page.waitForTimeout(3000);
+
+          // Extract all job cards
+          const jobs = await page.evaluate(() => {
+            const results: any[] = [];
+
+            // Strategy 1: Look for elements with job-related data attributes or classes
+            const jobCards = document.querySelectorAll('[data-job], [data-role], .job-card, .role-card, article, [role="article"]');
+
+            jobCards.forEach(card => {
+              const link = card.querySelector('a[href*="/careers/"]');
+              if (link) {
+                const href = link.getAttribute('href') || '';
+                const title = link.textContent?.trim() || card.querySelector('h2, h3, .title')?.textContent?.trim() || '';
+
+                if (href && title && title.length > 3 &&
+                    !href.endsWith('/careers/') &&
+                    !href.endsWith('/careers/search') &&
+                    !href.endsWith('/careers/search/')) {
+
+                  const fullUrl = href.startsWith('http') ? href : `https://openai.com${href}`;
+                  results.push({ title, url: fullUrl });
+                }
+              }
+            });
+
+            // Strategy 2: Find all links with /careers/ in href and extract meaningful titles
+            if (results.length === 0) {
+              const allLinks = Array.from(document.querySelectorAll('a[href*="/careers/"]'));
+
+              allLinks.forEach(link => {
+                const href = link.getAttribute('href') || '';
+                const text = link.textContent?.trim() || '';
+
+                // Filter out navigation links
+                if (text.length > 10 &&
+                    !href.endsWith('/careers/') &&
+                    !href.endsWith('/careers/search') &&
+                    !href.endsWith('/careers/search/') &&
+                    !text.toLowerCase().includes('view all') &&
+                    !text.toLowerCase().includes('see all') &&
+                    !text.toLowerCase().includes('learn more') &&
+                    !text.toLowerCase().includes('apply now')) {
+
+                  const fullUrl = href.startsWith('http') ? href : `https://openai.com${href}`;
+                  results.push({ title: text, url: fullUrl });
+                }
+              });
+            }
+
+            // Deduplicate by URL
+            const uniqueJobs = Array.from(
+              new Map(results.map(job => [job.url, job])).values()
+            );
+
+            return uniqueJobs;
+          });
+
+          console.log(`OpenAI: Found ${jobs.length} job listings`);
+
           if (!jobs || jobs.length === 0) {
-            throw new Error('No jobs found on page');
+            throw new Error(`No jobs found on page`);
           }
 
           const rawJobs = jobs.slice(0, limit).map((job, index) => ({
@@ -488,6 +553,8 @@ async function scrapeOpenAI(limit: number = 30): Promise<Job[]> {
             .map(job => validateAndSanitizeJob(job, 'OpenAI'))
             .filter((job): job is Job => job !== null);
 
+          console.log(`OpenAI: ${validatedJobs.length} valid jobs after validation`);
+
           if (validatedJobs.length === 0) {
             throw new Error('No valid jobs after validation');
           }
@@ -499,7 +566,7 @@ async function scrapeOpenAI(limit: number = 30): Promise<Job[]> {
         }
       }, 'OpenAI');
     },
-    { maxRetries: 1, retryDelay: 3000, timeoutMs: 75000, companyName: 'OpenAI' }
+    { maxRetries: 1, retryDelay: 3000, timeoutMs: 120000, companyName: 'OpenAI' }
   );
 }
 
@@ -968,15 +1035,15 @@ async function safeScrape(scraperFn: () => Promise<Job[]>, companyName: string):
 async function scrapeOtherCompanies(): Promise<Job[]> {
   console.log('Scraping other companies with Playwright...');
 
-  // Run all scrapers in parallel with safety wrappers
+  // Run all scrapers in parallel with safety wrappers (use default limits of 500)
   const results = await Promise.all([
-    safeScrape(() => scrapeOpenAI(30), 'OpenAI'),
-    safeScrape(() => scrapeAmazon(30), 'Amazon'),
-    safeScrape(() => scrapeApple(30), 'Apple'),
-    safeScrape(() => scrapeGlean(30), 'Glean'),
-    safeScrape(() => scrapeGoogle(30), 'Google'),
-    safeScrape(() => scrapeMeta(30), 'Meta'),
-    safeScrape(() => scrapeSentry(30), 'Sentry')
+    safeScrape(() => scrapeOpenAI(), 'OpenAI'),
+    safeScrape(() => scrapeAmazon(), 'Amazon'),
+    safeScrape(() => scrapeApple(), 'Apple'),
+    safeScrape(() => scrapeGlean(), 'Glean'),
+    safeScrape(() => scrapeGoogle(), 'Google'),
+    safeScrape(() => scrapeMeta(), 'Meta'),
+    safeScrape(() => scrapeSentry(), 'Sentry')
   ]);
 
   return results.flat();

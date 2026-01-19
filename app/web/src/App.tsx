@@ -197,6 +197,8 @@ function App() {
             'Sentry': 'https://sentry.io/careers/'
           };
 
+          const matchedJobs = companyJobs.filter(job => job.matched);
+
           return (
             <div key={company} className="company-section" data-company={company}>
               <h3>
@@ -207,8 +209,8 @@ function App() {
                   </a>
                 )}
               </h3>
-              {companyJobs.length === 0 ? (
-                <p className="no-jobs">No jobs found for {company}</p>
+              {matchedJobs.length === 0 ? (
+                <p className="no-jobs">No matched jobs for {company}</p>
               ) : (
                 <table>
                   <thead>
@@ -221,17 +223,13 @@ function App() {
                     </tr>
                   </thead>
                   <tbody>
-                    {companyJobs.map(job => (
-                      <tr key={job.id} className={job.matched ? 'matched' : 'unmatched'}>
+                    {matchedJobs.map(job => (
+                      <tr key={job.id} className="matched">
                         <td>{job.title}</td>
                         <td>{job.team || '-'}</td>
                         <td>{job.location || '-'}</td>
                         <td>
-                          {job.matched ? (
-                            <span className="match-badge">✓ {(job.matchScore! * 100).toFixed(0)}%</span>
-                          ) : (
-                            <span className="no-match">-</span>
-                          )}
+                          <span className="match-badge">✓ {(job.matchScore! * 100).toFixed(0)}%</span>
                         </td>
                         <td>
                           <a href={job.url} target="_blank" rel="noopener noreferrer">
