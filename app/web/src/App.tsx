@@ -49,6 +49,16 @@ function App() {
 
   // Load preferences and jobs from localStorage on mount
   useEffect(() => {
+    // Check data version and clear old cache if needed
+    const DATA_VERSION = '2'; // Increment when data structure changes
+    const currentVersion = localStorage.getItem('jobRadarDataVersion');
+
+    if (currentVersion !== DATA_VERSION) {
+      console.log('Clearing old cache due to data version change');
+      localStorage.removeItem('jobRadarLastResults');
+      localStorage.setItem('jobRadarDataVersion', DATA_VERSION);
+    }
+
     const savedPrefs = localStorage.getItem('jobRadarPreferences');
     if (savedPrefs) {
       setPreferences(JSON.parse(savedPrefs));
