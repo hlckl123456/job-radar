@@ -57,8 +57,8 @@ test.describe('Job Radar Smoke Tests', () => {
     const updateButton = page.getByRole('button', { name: 'Update Jobs' });
     await updateButton.click();
 
-    // Wait for completion - API might be too fast to catch loading state on localhost
-    await expect(updateButton).toContainText('Update Jobs', { timeout: 10000 });
+    // Wait for completion - Playwright scraping takes ~12-15 seconds
+    await expect(updateButton).toContainText('Update Jobs', { timeout: 20000 });
     await expect(updateButton).toBeEnabled();
 
     // Check that results section is visible
@@ -73,7 +73,7 @@ test.describe('Job Radar Smoke Tests', () => {
 
     // Update jobs first
     await page.getByRole('button', { name: 'Update Jobs' }).click();
-    await expect(page.getByRole('button', { name: 'Update Jobs' })).toBeEnabled({ timeout: 10000 });
+    await expect(page.getByRole('button', { name: 'Update Jobs' })).toBeEnabled({ timeout: 20000 });
 
     // Verify all 10 companies have sections
     for (const company of COMPANIES) {
@@ -88,7 +88,7 @@ test.describe('Job Radar Smoke Tests', () => {
 
     // Update jobs
     await page.getByRole('button', { name: 'Update Jobs' }).click();
-    await expect(page.getByRole('button', { name: 'Update Jobs' })).toBeEnabled({ timeout: 10000 });
+    await expect(page.getByRole('button', { name: 'Update Jobs' })).toBeEnabled({ timeout: 20000 });
 
     // Check if any jobs are displayed
     const jobLinks = page.locator('.company-section table a[href]');
@@ -109,10 +109,10 @@ test.describe('Job Radar Smoke Tests', () => {
 
     // Update jobs
     await page.getByRole('button', { name: 'Update Jobs' }).click();
-    await expect(page.getByRole('button', { name: 'Update Jobs' })).toBeEnabled({ timeout: 10000 });
+    await expect(page.getByRole('button', { name: 'Update Jobs' })).toBeEnabled({ timeout: 20000 });
 
     // Wait for last updated to appear
-    await expect(page.locator('.last-updated')).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('.last-updated')).toBeVisible({ timeout: 20000 });
 
     // Refresh page
     await page.reload();

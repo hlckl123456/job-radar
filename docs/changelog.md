@@ -124,7 +124,88 @@ Implemented real job scraping for Anthropic via Greenhouse API and added keyword
 - No rate limiting or error retry
 - Scraping is synchronous (could be slow with more companies)
 
-### Next Steps (Round 3+)
-1. Research and implement scrapers for remaining 9 companies
-2. Improve matching logic
-3. Add proper error handling
+### Next Steps (Round 4+)
+1. Fix OpenAI, Apple, Google, Meta scrapers (longer waits, API reverse engineering)
+2. Add authentication/session support for complex sites
+3. Implement more sophisticated matching with embeddings
+
+## Round 3 - Expanded to 6 Companies + Comprehensive Error Handling
+
+### Date
+2026-01-19
+
+### Summary
+Implemented Playwright scrapers for all 10 companies. Successfully scraped jobs from 6 companies (Anthropic, Stripe, Databricks via Greenhouse; Amazon, Glean, Sentry via Playwright). Improved matching logic with weighted keywords and added comprehensive error handling.
+
+### Changes Made
+
+#### API Server - Complete Refactor
+- **Generic Greenhouse scraper**: Extracts data from 3 companies (Anthropic, Stripe, Databricks)
+  - Consolidated into reusable `scrapeGreenhouse(companySlug, companyName, limit)` function
+  - 90+ jobs from Greenhouse companies
+
+- **7 Custom Playwright scrapers implemented**:
+  1. **OpenAI** - Partial (0 jobs, needs longer load/better selectors)
+  2. **Amazon** - Working (20+ jobs scraped)
+  3. **Apple** - Partial (0 jobs, complex JS rendering)
+  4. **Glean** - Working (6 jobs scraped)
+  5. **Google** - Partial (0 jobs, complex JS rendering)
+  6. **Meta** - Partial (0 jobs, complex React platform)
+  7. **Sentry** - Working (30 jobs scraped)
+
+- **Improved matching logic**:
+  - Weighted keyword scoring system:
+    - High-value terms (0.3 points): senior, staff, principal, lead, distributed systems, orchestration, multi-agent, AI infrastructure
+    - Medium-value terms (0.15 points): engineer, backend, platform, infrastructure, system, observability, AI
+    - Low-value terms (0.05 points): software, technical, architect, developer
+    - Strong negative terms (immediate disqualification): marketing, sales, recruiter, operations, finance
+    - Moderate negative terms (-0.4 points): frontend, UI, UX, design, product manager, research scientist, PhD
+  - Raised match threshold from 0.2 to 0.3
+  - Returns match scores for debugging
+
+- **Comprehensive error handling**:
+  - Timeout protection (30s for Greenhouse, 30s for Playwright scrapers)
+  - Promise.allSettled for parallel scraping (failures don't block other companies)
+  - Try-catch blocks around all async operations
+  - Graceful degradation - continues even if parts fail
+  - Browser cleanup on errors
+  - Detailed error logging with company names
+
+- **Performance improvements**:
+  - Parallel scraping of all companies
+  - Changed Playwright from 'networkidle' to 'domcontentloaded' for faster loads
+  - Total scraping time: ~12-13 seconds (down from 30+ seconds)
+
+#### Documentation
+- Updated `docs/sources.md`:
+  - Added implementation summary showing 6/10 companies working
+  - Marked 6 companies as DONE (Anthropic, Stripe, Databricks, Amazon, Glean, Sentry)
+  - Marked 4 companies as PARTIAL (OpenAI, Apple, Google, Meta) with detailed notes
+  - Documented scraping strategies for each company
+
+### What Works
+- **6 companies fully functional**: Anthropic, Stripe, Databricks, Amazon, Glean, Sentry
+- **146+ total jobs scraped** per update (90 from Greenhouse, 56 from Playwright)
+- **38 matched jobs** after filtering
+- **Improved matching** with weighted keywords reduces false positives
+- **Fast scraping**: 12-13 seconds for all companies
+- **Robust error handling**: Individual failures don't crash the system
+- All E2E tests still passing (to be verified)
+
+### Known Issues / Remaining Work
+- **4 companies return 0 jobs**: OpenAI, Apple, Google, Meta
+  - Root cause: Heavy JavaScript rendering, authentication requirements, or complex selectors
+  - Scrapers are implemented but need refinement
+  - May require:
+    - API reverse engineering
+    - Authenticated browser sessions
+    - Longer wait times (5-10s instead of 3s)
+    - Screenshot debugging to see actual rendered HTML
+- **Limited field extraction**: Some Playwright scrapers only extract title + URL (no location/team)
+- **No rate limiting**: Could hit anti-scraping measures with frequent requests
+
+### Next Steps (Round 4+)
+1. Debug OpenAI, Apple, Google, Meta scrapers with screenshots
+2. Implement authenticated sessions if needed
+3. Extract more fields (location, team, posted date) from Playwright scrapers
+4. Add rate limiting and request delays

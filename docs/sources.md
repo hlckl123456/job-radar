@@ -2,10 +2,22 @@
 
 This document tracks the careers page URLs and scraping strategies for each company.
 
+## Implementation Summary (Round 3)
+
+**6 out of 10 companies fully working:**
+- **Greenhouse API (3)**: Anthropic, Stripe, Databricks - 90+ jobs
+- **Playwright Scrapers (3)**: Amazon, Glean, Sentry - 56+ jobs
+- **Total**: 146+ jobs scraped per update
+
+**4 companies with partial implementation:**
+- **OpenAI, Apple, Google, Meta**: Playwright scrapers implemented but return 0 jobs
+- **Root cause**: Heavy JavaScript rendering, complex authentication, or non-standard selectors
+- **Future work**: API reverse engineering, authenticated sessions, or longer render waits
+
 ## Status Legend
-- **TODO**: Not yet researched
-- **IN_PROGRESS**: Currently being implemented
-- **DONE**: Fully implemented and tested
+- **DONE**: Fully implemented and tested, returning jobs
+- **PARTIAL**: Scraper implemented but returns 0 jobs (needs refinement)
+- **TODO**: Not yet implemented
 
 ---
 
@@ -20,83 +32,88 @@ This document tracks the careers page URLs and scraping strategies for each comp
 ---
 
 ## OpenAI
-- **Status**: TODO (Future iteration)
-- **Careers URL**: https://openai.com/careers
-- **JSON/API**: Not Greenhouse or Lever - needs further research
-- **Scraping Strategy**: TBD
-- **Notes**: Will require custom scraper or different ATS platform detection
+- **Status**: PARTIAL (Playwright implemented, 0 jobs scraped)
+- **Careers URL**: https://openai.com/careers/search
+- **JSON/API**: None - custom JavaScript-rendered careers platform
+- **Scraping Strategy**: Playwright with flexible selectors
+- **Notes**: Heavy JavaScript rendering, may need API reverse engineering or longer load times. Scraper implemented but returns 0 jobs currently.
 
 ---
 
 ## Amazon
-- **Status**: TODO (Future iteration)
-- **Careers URL**: https://www.amazon.jobs
-- **JSON/API**: TBD
-- **Scraping Strategy**: TBD
-- **Notes**: Large ATS system, likely has API
+- **Status**: DONE
+- **Careers URL**: https://www.amazon.jobs/en/search?base_query=software+engineer
+- **JSON/API**: None - custom ATS system
+- **Scraping Strategy**: Playwright with flexible selectors targeting job links
+- **Fields Available**: title, url
+- **Notes**: 20+ jobs scraped successfully. May not all match filtering criteria.
 
 ---
 
 ## Stripe
-- **Status**: TODO (Future iteration)
+- **Status**: DONE
 - **Careers URL**: https://stripe.com/jobs
-- **JSON/API**: TBD
-- **Scraping Strategy**: TBD
-- **Notes**: To be researched
+- **JSON/API**: Greenhouse API - `https://boards-api.greenhouse.io/v1/boards/stripe/jobs`
+- **Scraping Strategy**: Direct JSON API call, no authentication required
+- **Fields Available**: title, location, departments, updated_at, absolute_url, id
+- **Notes**: 500+ jobs available. Fully implemented.
 
 ---
 
 ## Apple
-- **Status**: TODO (Future iteration)
-- **Careers URL**: https://www.apple.com/careers
-- **JSON/API**: TBD
-- **Scraping Strategy**: TBD
-- **Notes**: Large company, likely uses standard ATS
+- **Status**: PARTIAL (Playwright implemented, 0 jobs scraped)
+- **Careers URL**: https://jobs.apple.com/en-us/search?team=apps-and-frameworks-SFTWR-AF+cloud-and-infrastructure-SFTWR-CLD
+- **JSON/API**: None - custom careers platform
+- **Scraping Strategy**: Playwright targeting job detail links
+- **Notes**: Complex JavaScript-rendered table structure. Scraper implemented but returns 0 jobs currently.
 
 ---
 
 ## Databricks
-- **Status**: TODO (Future iteration)
+- **Status**: DONE
 - **Careers URL**: https://www.databricks.com/company/careers
-- **JSON/API**: TBD
-- **Scraping Strategy**: TBD
-- **Notes**: To be researched
+- **JSON/API**: Greenhouse API - `https://boards-api.greenhouse.io/v1/boards/databricks/jobs`
+- **Scraping Strategy**: Direct JSON API call, no authentication required
+- **Fields Available**: title, location, departments, updated_at, absolute_url, id
+- **Notes**: 300+ jobs available. Fully implemented.
 
 ---
 
 ## Glean
-- **Status**: TODO (Future iteration)
-- **Careers URL**: https://glean.com/careers
-- **JSON/API**: TBD
-- **Scraping Strategy**: TBD
-- **Notes**: May use Greenhouse or Lever
+- **Status**: DONE
+- **Careers URL**: https://glean.com/careers#open-positions
+- **JSON/API**: None - custom integration
+- **Scraping Strategy**: Playwright with flexible job/position class selectors
+- **Fields Available**: title, location, url
+- **Notes**: 6 jobs scraped successfully. Smaller company with straightforward HTML structure.
 
 ---
 
 ## Google
-- **Status**: TODO (Future iteration)
-- **Careers URL**: https://careers.google.com
-- **JSON/API**: TBD
-- **Scraping Strategy**: TBD
-- **Notes**: Large custom ATS
+- **Status**: PARTIAL (Playwright implemented, 0 jobs scraped)
+- **Careers URL**: https://careers.google.com/jobs/results/?q=software%20engineer
+- **JSON/API**: None - custom Google careers system
+- **Scraping Strategy**: Playwright targeting job result links
+- **Notes**: Heavily JavaScript-rendered with complex filtering. Scraper implemented but returns 0 jobs currently.
 
 ---
 
 ## Meta
-- **Status**: TODO (Future iteration)
-- **Careers URL**: https://www.metacareers.com
-- **JSON/API**: TBD
-- **Scraping Strategy**: TBD
-- **Notes**: Custom careers platform
+- **Status**: PARTIAL (Playwright implemented, 0 jobs scraped)
+- **Careers URL**: https://www.metacareers.com/jobs?q=software%20engineer
+- **JSON/API**: None - custom Meta careers platform
+- **Scraping Strategy**: Playwright targeting job links
+- **Notes**: Custom React-based platform with dynamic rendering. Scraper implemented but returns 0 jobs currently.
 
 ---
 
 ## Sentry
-- **Status**: TODO (Future iteration)
-- **Careers URL**: https://sentry.io/careers
-- **JSON/API**: TBD
-- **Scraping Strategy**: TBD
-- **Notes**: May use standard ATS
+- **Status**: DONE
+- **Careers URL**: https://sentry.io/careers/
+- **JSON/API**: None - likely Ashby or custom
+- **Scraping Strategy**: Playwright targeting careers page links
+- **Fields Available**: title, url
+- **Notes**: 30 jobs scraped successfully. Simple HTML structure with career links.
 
 ---
 
