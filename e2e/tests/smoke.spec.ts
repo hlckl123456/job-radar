@@ -57,8 +57,8 @@ test.describe('Job Radar Smoke Tests', () => {
     const updateButton = page.getByRole('button', { name: 'Update Jobs' });
     await updateButton.click();
 
-    // Wait for completion - Playwright scraping now takes ~18-20 seconds with all companies
-    await expect(updateButton).toContainText('Update Jobs', { timeout: 30000 });
+    // Wait for completion - Playwright scraping with retries now takes ~35-40 seconds
+    await expect(updateButton).toContainText('Update Jobs', { timeout: 45000 });
     await expect(updateButton).toBeEnabled();
 
     // Check that results section is visible
@@ -73,7 +73,7 @@ test.describe('Job Radar Smoke Tests', () => {
 
     // Update jobs first
     await page.getByRole('button', { name: 'Update Jobs' }).click();
-    await expect(page.getByRole('button', { name: 'Update Jobs' })).toBeEnabled({ timeout: 30000 });
+    await expect(page.getByRole('button', { name: 'Update Jobs' })).toBeEnabled({ timeout: 45000 });
 
     // Verify all 10 companies have sections
     for (const company of COMPANIES) {
@@ -88,7 +88,7 @@ test.describe('Job Radar Smoke Tests', () => {
 
     // Update jobs
     await page.getByRole('button', { name: 'Update Jobs' }).click();
-    await expect(page.getByRole('button', { name: 'Update Jobs' })).toBeEnabled({ timeout: 30000 });
+    await expect(page.getByRole('button', { name: 'Update Jobs' })).toBeEnabled({ timeout: 45000 });
 
     // Check if any jobs are displayed
     const jobLinks = page.locator('.company-section table a[href]');
@@ -109,10 +109,10 @@ test.describe('Job Radar Smoke Tests', () => {
 
     // Update jobs
     await page.getByRole('button', { name: 'Update Jobs' }).click();
-    await expect(page.getByRole('button', { name: 'Update Jobs' })).toBeEnabled({ timeout: 30000 });
+    await expect(page.getByRole('button', { name: 'Update Jobs' })).toBeEnabled({ timeout: 45000 });
 
     // Wait for last updated to appear
-    await expect(page.locator('.last-updated')).toBeVisible({ timeout: 30000 });
+    await expect(page.locator('.last-updated')).toBeVisible({ timeout: 45000 });
 
     // Refresh page
     await page.reload();

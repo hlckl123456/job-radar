@@ -48,118 +48,341 @@ app.get('/api/jobs', async (req, res) => {
   }
 });
 
-// Improved keyword-based matching with better scoring
+// Sophisticated matching with user preferences, phrase matching, and advanced scoring
 function matchJob(job: any, preferences: any): { matched: boolean; matchScore: number } {
-  const jobText = `${job.title} ${job.team || ''} ${job.location || ''}`.toLowerCase();
+  const titleLower = job.title.toLowerCase();
+  const teamLower = (job.team || '').toLowerCase();
+  const locationLower = (job.location || '').toLowerCase();
+  const jobText = `${titleLower} ${teamLower} ${locationLower}`;
 
-  // High-value positive terms (strong indicators)
-  const highValueTerms = [
-    'senior', 'staff', 'principal', 'lead',
-    'distributed system', 'distributed systems',
-    'workflow orchestration', 'orchestration',
-    'multi-agent', 'ai system', 'ai infrastructure'
-  ];
-
-  // Medium-value positive terms
-  const mediumValueTerms = [
-    'engineer', 'engineering', 'backend', 'platform',
-    'infrastructure', 'system', 'reliability',
-    'observability', 'ai', 'machine learning'
-  ];
-
-  // Low-value positive terms
-  const lowValueTerms = [
-    'software', 'technical', 'architect', 'developer'
-  ];
-
-  // Strong negative terms (immediate disqualification)
-  const strongNegativeTerms = [
-    'marketing', 'sales', 'account executive', 'recruiter',
-    'operations', 'finance', 'legal', 'compliance'
-  ];
-
-  // Moderate negative terms (reduce score significantly)
-  const moderateNegativeTerms = [
-    'frontend', 'ui ', 'ux ', 'design', 'product manager',
-    'research scientist', 'phd'
-  ];
+  // Parse user preferences if available
+  const lookingFor = preferences?.lookingFor?.toLowerCase() || '';
+  const notLookingFor = preferences?.notLookingFor?.toLowerCase() || '';
 
   let score = 0;
+  let maxPossibleScore = 0;
 
-  // Check high-value terms (0.3 points each)
-  for (const term of highValueTerms) {
-    if (jobText.includes(term)) {
-      score += 0.3;
+  // === PHASE 1: User-defined positive preferences (highest priority) ===
+  if (lookingFor) {
+    maxPossibleScore += 0.5;
+    const userPositiveTerms = extractKeyTerms(lookingFor);
+    const userPhrases = extractPhrases(lookingFor);
+
+    // Check phrases first (exact multi-word matches) - 0.25 points each
+    for (const phrase of userPhrases) {
+      if (jobText.includes(phrase)) {
+        score += 0.25;
+      }
+    }
+
+    // Check individual terms - 0.1 points each, up to 0.25 total
+    let userTermScore = 0;
+    for (const term of userPositiveTerms) {
+      if (jobText.includes(term) && !userPhrases.some(p => p.includes(term))) {
+        userTermScore += 0.1;
+      }
+    }
+    score += Math.min(0.25, userTermScore);
+  }
+
+  // === PHASE 2: User-defined negative preferences (can disqualify) ===
+  if (notLookingFor) {
+    const userNegativeTerms = extractKeyTerms(notLookingFor);
+    const userNegativePhrases = extractPhrases(notLookingFor);
+
+    // Check negative phrases - immediate disqualification
+    for (const phrase of userNegativePhrases) {
+      if (jobText.includes(phrase)) {
+        return { matched: false, matchScore: 0 };
+      }
+    }
+
+    // Check negative terms - reduce score by 0.3 each
+    for (const term of userNegativeTerms) {
+      if (jobText.includes(term) && !userNegativePhrases.some(p => p.includes(term))) {
+        score -= 0.3;
+      }
     }
   }
 
-  // Check medium-value terms (0.15 points each)
-  for (const term of mediumValueTerms) {
-    if (jobText.includes(term)) {
+  // === PHASE 3: Built-in seniority matching (high weight) ===
+  maxPossibleScore += 0.4;
+  const seniorityTerms = {
+    high: ['staff', 'principal', 'distinguished', 'fellow'],
+    medium: ['senior', 'lead', 'sr.', 'sr '],
+    low: ['mid-level', 'intermediate']
+  };
+
+  let seniorityScore = 0;
+  for (const term of seniorityTerms.high) {
+    if (titleLower.includes(term)) {
+      seniorityScore = Math.max(seniorityScore, 0.4);
+    }
+  }
+  for (const term of seniorityTerms.medium) {
+    if (titleLower.includes(term)) {
+      seniorityScore = Math.max(seniorityScore, 0.25);
+    }
+  }
+  for (const term of seniorityTerms.low) {
+    if (titleLower.includes(term)) {
+      seniorityScore = Math.max(seniorityScore, 0.1);
+    }
+  }
+  score += seniorityScore;
+
+  // === PHASE 4: Technical domain matching (medium weight) ===
+  maxPossibleScore += 0.35;
+  const domainKeywords = {
+    distributed_systems: ['distributed system', 'distributed computing', 'microservice', 'service mesh'],
+    ai_ml: ['ai', 'machine learning', 'ml', 'llm', 'large language model', 'multi-agent'],
+    backend_infra: ['backend', 'infrastructure', 'platform', 'reliability', 'sre', 'devops'],
+    orchestration: ['orchestration', 'workflow', 'scheduler', 'coordinator'],
+    observability: ['observability', 'monitoring', 'tracing', 'telemetry']
+  };
+
+  let domainScore = 0;
+  for (const [domain, keywords] of Object.entries(domainKeywords)) {
+    for (const keyword of keywords) {
+      if (jobText.includes(keyword)) {
+        domainScore += 0.08;
+        break; // Only count once per domain
+      }
+    }
+  }
+  score += Math.min(0.35, domainScore);
+
+  // === PHASE 5: Role type validation (required minimum) ===
+  maxPossibleScore += 0.15;
+  const roleTypes = ['engineer', 'engineering', 'architect', 'developer', 'scientist', 'researcher'];
+  let hasRoleType = false;
+  for (const role of roleTypes) {
+    if (titleLower.includes(role)) {
+      hasRoleType = true;
       score += 0.15;
+      break;
     }
   }
 
-  // Check low-value terms (0.05 points each)
-  for (const term of lowValueTerms) {
-    if (jobText.includes(term)) {
-      score += 0.05;
-    }
-  }
+  // === PHASE 6: Strong negative filters (immediate disqualification) ===
+  const strongNegativeTerms = [
+    'marketing', 'sales', 'account executive', 'recruiter', 'recruiting',
+    'operations manager', 'finance', 'legal', 'compliance', 'hr',
+    'customer success', 'account manager', 'business development'
+  ];
 
-  // Check strong negative terms (immediate fail)
   for (const term of strongNegativeTerms) {
-    if (jobText.includes(term)) {
+    if (titleLower.includes(term) || teamLower.includes(term)) {
       return { matched: false, matchScore: 0 };
     }
   }
 
-  // Check moderate negative terms (reduce score)
-  for (const term of moderateNegativeTerms) {
-    if (jobText.includes(term)) {
-      score -= 0.4;
+  // === PHASE 7: Moderate negative filters (significant penalty) ===
+  const moderateNegativeTerms = {
+    frontend: ['frontend', 'front-end', 'react', 'vue', 'angular', 'ui engineer', 'ux engineer'],
+    research: ['research scientist', 'research engineer', 'phd required'],
+    product: ['product manager', 'program manager', 'tpm'],
+    junior: ['junior', 'entry level', 'intern', 'internship', 'new grad']
+  };
+
+  for (const [category, terms] of Object.entries(moderateNegativeTerms)) {
+    for (const term of terms) {
+      if (jobText.includes(term)) {
+        score -= 0.25;
+        break; // Only penalize once per category
+      }
     }
   }
 
-  // Match threshold: need at least 0.3 score
-  const matched = score >= 0.3;
+  // === PHASE 8: Location bonus (optional enhancement) ===
+  const preferredLocations = ['remote', 'san francisco', 'sf', 'bay area', 'new york'];
+  for (const loc of preferredLocations) {
+    if (locationLower.includes(loc)) {
+      score += 0.05;
+      break;
+    }
+  }
 
-  return { matched, matchScore: Math.max(0, Math.min(1, score)) };
+  // Normalize score to 0-1 range
+  const normalizedScore = Math.max(0, Math.min(1, score / maxPossibleScore));
+
+  // Match threshold: need at least 0.35 normalized score AND must have valid role type
+  const matched = normalizedScore >= 0.35 && hasRoleType && score > 0;
+
+  return { matched, matchScore: normalizedScore };
 }
 
-// Generic Greenhouse scraper
-async function scrapeGreenhouse(companySlug: string, companyName: string, limit: number = 50): Promise<Job[]> {
-  try {
-    const response = await fetch(`https://boards-api.greenhouse.io/v1/boards/${companySlug}/jobs`);
+// Helper: Extract key terms from text (remove common words)
+function extractKeyTerms(text: string): string[] {
+  const stopWords = new Set(['the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'from', 'as', 'is', 'was', 'are', 'be', 'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'should', 'could', 'may', 'might', 'must', 'can']);
 
-    if (!response.ok) {
-      console.error(`Greenhouse API returned ${response.status} for ${companyName}`);
-      return [];
-    }
+  return text
+    .split(/[\s,;.!?]+/)
+    .map(t => t.trim())
+    .filter(t => t.length > 2 && !stopWords.has(t));
+}
 
-    const data = await response.json();
+// Helper: Extract meaningful phrases (2-3 word combinations)
+function extractPhrases(text: string): string[] {
+  const phrases: string[] = [];
+  const words = text.split(/\s+/).filter(w => w.length > 0);
 
-    if (!data.jobs || !Array.isArray(data.jobs)) {
-      console.error(`Invalid data format from Greenhouse for ${companyName}`);
-      return [];
-    }
-
-    return data.jobs.slice(0, limit).map((job: any) => ({
-      id: `${companySlug}-${job.id}`,
-      company: companyName,
-      title: job.title,
-      team: job.departments?.[0]?.name || '',
-      location: job.location?.name || '',
-      posted: job.updated_at,
-      snippet: '',
-      url: job.absolute_url,
-      matched: false,
-      matchScore: 0
-    }));
-  } catch (error) {
-    console.error(`Error scraping ${companyName}:`, error);
-    return [];
+  // Extract 2-word phrases
+  for (let i = 0; i < words.length - 1; i++) {
+    phrases.push(`${words[i]} ${words[i + 1]}`);
   }
+
+  // Extract 3-word phrases
+  for (let i = 0; i < words.length - 2; i++) {
+    phrases.push(`${words[i]} ${words[i + 1]} ${words[i + 2]}`);
+  }
+
+  return phrases;
+}
+
+// Error handling wrapper with retry logic
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  options: { maxRetries?: number; retryDelay?: number; timeoutMs?: number; companyName: string }
+): Promise<T> {
+  const { maxRetries = 2, retryDelay = 2000, timeoutMs = 60000, companyName } = options;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      // Add timeout wrapper
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error(`Timeout after ${timeoutMs}ms`)), timeoutMs)
+      );
+
+      const result = await Promise.race([fn(), timeoutPromise]);
+      return result;
+    } catch (error) {
+      const isLastAttempt = attempt === maxRetries;
+      const errorMessage = error instanceof Error ? error.message : String(error);
+
+      if (isLastAttempt) {
+        console.error(`${companyName}: Failed after ${maxRetries + 1} attempts - ${errorMessage}`);
+        throw error;
+      }
+
+      console.warn(`${companyName}: Attempt ${attempt + 1} failed, retrying in ${retryDelay}ms - ${errorMessage}`);
+      await new Promise(resolve => setTimeout(resolve, retryDelay));
+    }
+  }
+
+  throw new Error(`${companyName}: Max retries exceeded`);
+}
+
+// Data validation and sanitization
+function validateAndSanitizeJob(job: any, company: string): Job | null {
+  try {
+    // Required fields validation
+    if (!job.id || typeof job.id !== 'string') {
+      console.warn(`${company}: Invalid job ID`);
+      return null;
+    }
+
+    if (!job.title || typeof job.title !== 'string' || job.title.trim().length < 3) {
+      console.warn(`${company}: Invalid job title`);
+      return null;
+    }
+
+    if (!job.url || typeof job.url !== 'string') {
+      console.warn(`${company}: Invalid job URL`);
+      return null;
+    }
+
+    // URL validation
+    try {
+      new URL(job.url);
+    } catch {
+      console.warn(`${company}: Malformed URL - ${job.url}`);
+      return null;
+    }
+
+    // Sanitize and return
+    return {
+      id: String(job.id).trim(),
+      company: String(company).trim(),
+      title: String(job.title).trim(),
+      team: job.team ? String(job.team).trim() : '',
+      location: job.location ? String(job.location).trim() : '',
+      posted: job.posted || new Date().toISOString(),
+      snippet: job.snippet ? String(job.snippet).trim() : '',
+      url: String(job.url).trim(),
+      matched: Boolean(job.matched),
+      matchScore: typeof job.matchScore === 'number' ? job.matchScore : 0
+    };
+  } catch (error) {
+    console.error(`${company}: Error validating job`, error);
+    return null;
+  }
+}
+
+// Generic Greenhouse scraper with enhanced error handling
+async function scrapeGreenhouse(companySlug: string, companyName: string, limit: number = 50): Promise<Job[]> {
+  return withRetry(
+    async () => {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+      try {
+        const response = await fetch(
+          `https://boards-api.greenhouse.io/v1/boards/${companySlug}/jobs`,
+          { signal: controller.signal }
+        );
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          throw new Error(`Greenhouse API returned ${response.status}`);
+        }
+
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+          throw new Error(`Invalid content type: ${contentType}`);
+        }
+
+        const data = await response.json();
+
+        if (!data.jobs || !Array.isArray(data.jobs)) {
+          throw new Error('Invalid data format: jobs array not found');
+        }
+
+        if (data.jobs.length === 0) {
+          console.warn(`${companyName}: No jobs found`);
+          return [];
+        }
+
+        const rawJobs = data.jobs.slice(0, limit).map((job: any) => ({
+          id: `${companySlug}-${job.id}`,
+          company: companyName,
+          title: job.title,
+          team: job.departments?.[0]?.name || '',
+          location: job.location?.name || '',
+          posted: job.updated_at,
+          snippet: '',
+          url: job.absolute_url,
+          matched: false,
+          matchScore: 0
+        }));
+
+        // Validate and filter jobs
+        const validatedJobs = rawJobs
+          .map(job => validateAndSanitizeJob(job, companyName))
+          .filter((job): job is Job => job !== null);
+
+        if (validatedJobs.length === 0) {
+          throw new Error('No valid jobs after validation');
+        }
+
+        return validatedJobs;
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    },
+    { maxRetries: 2, retryDelay: 2000, timeoutMs: 35000, companyName }
+  );
 }
 
 // Scrape companies using Greenhouse
@@ -179,353 +402,499 @@ async function scrapeGreenhouseCompanies(): Promise<Job[]> {
   return results.flat();
 }
 
-// OpenAI scraper using Playwright - use load event instead of networkidle
-async function scrapeOpenAI(limit: number = 30): Promise<Job[]> {
-  const browser = await chromium.launch({ headless: true });
-  const page = await browser.newPage();
+// Safe browser wrapper with proper cleanup
+async function withBrowser<T>(
+  fn: (browser: any, page: any) => Promise<T>,
+  companyName: string
+): Promise<T> {
+  let browser = null;
+  let page = null;
 
   try {
-    // Use 'load' instead of 'networkidle' - OpenAI page has continuous network activity
-    await page.goto('https://openai.com/careers/search', { waitUntil: 'load', timeout: 60000 });
-
-    // Wait longer for React to render content
-    console.log('OpenAI: Waiting for content to render...');
-    await page.waitForTimeout(15000);
-
-    // Try to find job listings - look for any link containing keywords
-    const jobs = await page.$$eval('a', links => {
-      const results: any[] = [];
-      links.forEach(link => {
-        const title = link.textContent?.trim() || '';
-        const url = link.href;
-
-        // Look for engineering job titles in the link text
-        const hasJobKeywords = title.toLowerCase().match(/(engineer|developer|architect|scientist|manager|director|analyst)/);
-        const isCareerLink = url.includes('/careers/') && url.length > 30;
-        const notNavLink = !title.toLowerCase().match(/(home|about|search|skip|chatgpt|sora|api platform)/);
-
-        if (hasJobKeywords && isCareerLink && notNavLink && title.length > 15) {
-          results.push({ title, url });
-        }
-      });
-      return results;
+    browser = await chromium.launch({
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
     });
 
-    await browser.close();
+    page = await browser.newPage();
 
-    return jobs
-      .slice(0, limit)
-      .map((job, index) => ({
-        id: `openai-${job.url.split('/').filter(Boolean).pop() || index}`,
-        company: 'OpenAI',
-        title: job.title,
-        team: '',
-        location: '',
-        posted: new Date().toISOString(),
-        snippet: '',
-        url: job.url,
-        matched: false,
-        matchScore: 0
-      }));
+    // Set reasonable defaults
+    await page.setDefaultTimeout(45000);
+    await page.setViewportSize({ width: 1280, height: 720 });
+
+    const result = await fn(browser, page);
+    return result;
   } catch (error) {
-    console.error('Error scraping OpenAI:', error);
-    await browser.close();
-    return [];
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    throw new Error(`${companyName} browser error: ${errorMessage}`);
+  } finally {
+    // Ensure browser is always closed
+    try {
+      if (page) await page.close().catch(() => {});
+      if (browser) await browser.close().catch(() => {});
+    } catch (cleanupError) {
+      console.warn(`${companyName}: Error during browser cleanup`, cleanupError);
+    }
   }
+}
+
+// OpenAI scraper with enhanced error handling
+async function scrapeOpenAI(limit: number = 30): Promise<Job[]> {
+  return withRetry(
+    async () => {
+      return withBrowser(async (browser, page) => {
+        try {
+          await page.goto('https://openai.com/careers/search', {
+            waitUntil: 'load',
+            timeout: 60000
+          });
+
+          console.log('OpenAI: Waiting for content to render...');
+          await page.waitForTimeout(15000);
+
+          // Try to find job listings
+          const jobs = await page.$$eval('a', (links: HTMLAnchorElement[]) => {
+            const results: any[] = [];
+            links.forEach(link => {
+              const title = link.textContent?.trim() || '';
+              const url = link.href;
+
+              const hasJobKeywords = title.toLowerCase().match(/(engineer|developer|architect|scientist|manager|director|analyst)/);
+              const isCareerLink = url.includes('/careers/') && url.length > 30;
+              const notNavLink = !title.toLowerCase().match(/(home|about|search|skip|chatgpt|sora|api platform)/);
+
+              if (hasJobKeywords && isCareerLink && notNavLink && title.length > 15) {
+                results.push({ title, url });
+              }
+            });
+            return results;
+          });
+
+          if (!jobs || jobs.length === 0) {
+            throw new Error('No jobs found on page');
+          }
+
+          const rawJobs = jobs.slice(0, limit).map((job, index) => ({
+            id: `openai-${job.url.split('/').filter(Boolean).pop() || index}`,
+            company: 'OpenAI',
+            title: job.title,
+            team: '',
+            location: '',
+            posted: new Date().toISOString(),
+            snippet: '',
+            url: job.url,
+            matched: false,
+            matchScore: 0
+          }));
+
+          // Validate jobs
+          const validatedJobs = rawJobs
+            .map(job => validateAndSanitizeJob(job, 'OpenAI'))
+            .filter((job): job is Job => job !== null);
+
+          if (validatedJobs.length === 0) {
+            throw new Error('No valid jobs after validation');
+          }
+
+          return validatedJobs;
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          throw new Error(`OpenAI scraping failed: ${errorMessage}`);
+        }
+      }, 'OpenAI');
+    },
+    { maxRetries: 1, retryDelay: 3000, timeoutMs: 75000, companyName: 'OpenAI' }
+  );
 }
 
 // Amazon scraper using Playwright
 async function scrapeAmazon(limit: number = 30): Promise<Job[]> {
-  const browser = await chromium.launch({ headless: true });
-  const page = await browser.newPage();
+  return withRetry(
+    async () => {
+      return withBrowser(async (browser, page) => {
+        try {
+          await page.goto('https://www.amazon.jobs/en/search?base_query=software+engineer&loc_query=', { waitUntil: 'domcontentloaded', timeout: 45000 });
 
-  try {
-    await page.goto('https://www.amazon.jobs/en/search?base_query=software+engineer&loc_query=', { waitUntil: 'domcontentloaded', timeout: 45000 });
+          await page.waitForTimeout(3000);
 
-    await page.waitForTimeout(3000);
+          const jobs = await page.evaluate(() => {
+            const jobLinks = Array.from(document.querySelectorAll('a[href*="/jobs/"]'));
 
-    const jobs = await page.evaluate(() => {
-      const jobLinks = Array.from(document.querySelectorAll('a[href*="/jobs/"]'));
+            return jobLinks.slice(0, 30).map((link) => {
+              const el = link as HTMLAnchorElement;
+              const title = el.textContent?.trim() || '';
+              const url = el.href;
 
-      return jobLinks.slice(0, 30).map((link) => {
-        const el = link as HTMLAnchorElement;
-        const title = el.textContent?.trim() || '';
-        const url = el.href;
+              return { title, url, id: url.split('/').pop() || '' };
+            }).filter(job => job.title && job.title.length > 5);
+          });
 
-        return { title, url, id: url.split('/').pop() || '' };
-      }).filter(job => job.title && job.title.length > 5);
-    });
+          if (!jobs || jobs.length === 0) {
+            throw new Error('No jobs found on page');
+          }
 
-    await browser.close();
+          const rawJobs = jobs
+            .filter(job => job.title && job.url)
+            .map(job => ({
+              id: `amazon-${job.id || job.title.toLowerCase().replace(/\s+/g, '-')}`,
+              company: 'Amazon',
+              title: job.title,
+              team: '',
+              location: '',
+              posted: new Date().toISOString(),
+              snippet: '',
+              url: job.url.startsWith('http') ? job.url : `https://www.amazon.jobs${job.url}`,
+              matched: false,
+              matchScore: 0
+            }));
 
-    return jobs
-      .filter(job => job.title && job.url)
-      .map(job => ({
-        id: `amazon-${job.id || job.title.toLowerCase().replace(/\s+/g, '-')}`,
-        company: 'Amazon',
-        title: job.title,
-        team: '',
-        location: '',
-        posted: new Date().toISOString(),
-        snippet: '',
-        url: job.url.startsWith('http') ? job.url : `https://www.amazon.jobs${job.url}`,
-        matched: false,
-        matchScore: 0
-      }));
-  } catch (error) {
-    console.error('Error scraping Amazon:', error);
-    await browser.close();
-    return [];
-  }
+          // Validate jobs
+          const validatedJobs = rawJobs
+            .map(job => validateAndSanitizeJob(job, 'Amazon'))
+            .filter((job): job is Job => job !== null);
+
+          if (validatedJobs.length === 0) {
+            throw new Error('No valid jobs after validation');
+          }
+
+          return validatedJobs;
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          throw new Error(`Amazon scraping failed: ${errorMessage}`);
+        }
+      }, 'Amazon');
+    },
+    { maxRetries: 1, retryDelay: 3000, timeoutMs: 75000, companyName: 'Amazon' }
+  );
 }
 
 // Apple scraper using Playwright
 async function scrapeApple(limit: number = 30): Promise<Job[]> {
-  const browser = await chromium.launch({ headless: true });
-  const page = await browser.newPage();
+  return withRetry(
+    async () => {
+      return withBrowser(async (browser, page) => {
+        try {
+          await page.goto('https://jobs.apple.com/en-us/search?team=apps-and-frameworks-SFTWR-AF+cloud-and-infrastructure-SFTWR-CLD',
+            { waitUntil: 'load', timeout: 60000 });
 
-  try {
-    await page.goto('https://jobs.apple.com/en-us/search?team=apps-and-frameworks-SFTWR-AF+cloud-and-infrastructure-SFTWR-CLD',
-      { waitUntil: 'load', timeout: 60000 });
+          console.log('Apple: Waiting for table to render...');
+          await page.waitForTimeout(15000);
 
-    console.log('Apple: Waiting for table to render...');
-    await page.waitForTimeout(15000);
+          // Extract all links that go to job details
+          const jobs = await page.$$eval('a', links => {
+            return links
+              .map(link => ({
+                title: link.textContent?.trim() || '',
+                url: link.href
+              }))
+              .filter(job =>
+                (job.url.includes('/en-us/details/') || job.url.includes('/search/')) &&
+                job.title.length > 10 &&
+                !job.title.toLowerCase().includes('search jobs') &&
+                !job.title.toLowerCase().includes('apple')
+              );
+          });
 
-    // Extract all links that go to job details
-    const jobs = await page.$$eval('a', links => {
-      return links
-        .map(link => ({
-          title: link.textContent?.trim() || '',
-          url: link.href
-        }))
-        .filter(job =>
-          (job.url.includes('/en-us/details/') || job.url.includes('/search/')) &&
-          job.title.length > 10 &&
-          !job.title.toLowerCase().includes('search jobs') &&
-          !job.title.toLowerCase().includes('apple')
-        );
-    });
+          if (!jobs || jobs.length === 0) {
+            throw new Error('No jobs found on page');
+          }
 
-    await browser.close();
+          const rawJobs = jobs
+            .slice(0, limit)
+            .map((job, index) => ({
+              id: `apple-${job.url.split('/').filter(Boolean).pop() || index}`,
+              company: 'Apple',
+              title: job.title,
+              team: '',
+              location: '',
+              posted: new Date().toISOString(),
+              snippet: '',
+              url: job.url.startsWith('http') ? job.url : `https://jobs.apple.com${job.url}`,
+              matched: false,
+              matchScore: 0
+            }));
 
-    return jobs
-      .slice(0, limit)
-      .map((job, index) => ({
-        id: `apple-${job.url.split('/').filter(Boolean).pop() || index}`,
-        company: 'Apple',
-        title: job.title,
-        team: '',
-        location: '',
-        posted: new Date().toISOString(),
-        snippet: '',
-        url: job.url.startsWith('http') ? job.url : `https://jobs.apple.com${job.url}`,
-        matched: false,
-        matchScore: 0
-      }));
-  } catch (error) {
-    console.error('Error scraping Apple:', error);
-    await browser.close();
-    return [];
-  }
+          // Validate jobs
+          const validatedJobs = rawJobs
+            .map(job => validateAndSanitizeJob(job, 'Apple'))
+            .filter((job): job is Job => job !== null);
+
+          if (validatedJobs.length === 0) {
+            throw new Error('No valid jobs after validation');
+          }
+
+          return validatedJobs;
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          throw new Error(`Apple scraping failed: ${errorMessage}`);
+        }
+      }, 'Apple');
+    },
+    { maxRetries: 1, retryDelay: 3000, timeoutMs: 75000, companyName: 'Apple' }
+  );
 }
 
 // Glean scraper using Playwright
 async function scrapeGlean(limit: number = 30): Promise<Job[]> {
-  const browser = await chromium.launch({ headless: true });
-  const page = await browser.newPage();
+  return withRetry(
+    async () => {
+      return withBrowser(async (browser, page) => {
+        try {
+          await page.goto('https://glean.com/careers#open-positions', { waitUntil: 'networkidle', timeout: 30000 });
 
-  try {
-    await page.goto('https://glean.com/careers#open-positions', { waitUntil: 'networkidle', timeout: 30000 });
+          await page.waitForSelector('[class*="job"], [class*="position"]', { timeout: 10000 }).catch(() => {
+            console.log('Glean: No job elements found');
+          });
 
-    await page.waitForSelector('[class*="job"], [class*="position"]', { timeout: 10000 }).catch(() => {
-      console.log('Glean: No job elements found');
-    });
+          const jobs = await page.$$eval('[class*="job"], [class*="position"]', (elements) => {
+            return elements.slice(0, 30).map((el) => {
+              const titleEl = el.querySelector('h3, h4, [class*="title"]');
+              const locationEl = el.querySelector('[class*="location"]');
+              const linkEl = el.querySelector('a');
 
-    const jobs = await page.$$eval('[class*="job"], [class*="position"]', (elements) => {
-      return elements.slice(0, 30).map((el) => {
-        const titleEl = el.querySelector('h3, h4, [class*="title"]');
-        const locationEl = el.querySelector('[class*="location"]');
-        const linkEl = el.querySelector('a');
+              return {
+                title: titleEl?.textContent?.trim() || '',
+                location: locationEl?.textContent?.trim() || '',
+                url: linkEl?.href || ''
+              };
+            });
+          }).catch(() => []);
 
-        return {
-          title: titleEl?.textContent?.trim() || '',
-          location: locationEl?.textContent?.trim() || '',
-          url: linkEl?.href || ''
-        };
-      });
-    }).catch(() => []);
+          if (!jobs || jobs.length === 0) {
+            throw new Error('No jobs found on page');
+          }
 
-    await browser.close();
+          const rawJobs = jobs
+            .filter(job => job.title && job.url)
+            .map(job => ({
+              id: `glean-${job.title.toLowerCase().replace(/\s+/g, '-')}`,
+              company: 'Glean',
+              title: job.title,
+              team: '',
+              location: job.location,
+              posted: new Date().toISOString(),
+              snippet: '',
+              url: job.url,
+              matched: false,
+              matchScore: 0
+            }));
 
-    return jobs
-      .filter(job => job.title && job.url)
-      .map(job => ({
-        id: `glean-${job.title.toLowerCase().replace(/\s+/g, '-')}`,
-        company: 'Glean',
-        title: job.title,
-        team: '',
-        location: job.location,
-        posted: new Date().toISOString(),
-        snippet: '',
-        url: job.url,
-        matched: false,
-        matchScore: 0
-      }));
-  } catch (error) {
-    console.error('Error scraping Glean:', error);
-    await browser.close();
-    return [];
-  }
+          // Validate jobs
+          const validatedJobs = rawJobs
+            .map(job => validateAndSanitizeJob(job, 'Glean'))
+            .filter((job): job is Job => job !== null);
+
+          if (validatedJobs.length === 0) {
+            throw new Error('No valid jobs after validation');
+          }
+
+          return validatedJobs;
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          throw new Error(`Glean scraping failed: ${errorMessage}`);
+        }
+      }, 'Glean');
+    },
+    { maxRetries: 1, retryDelay: 3000, timeoutMs: 75000, companyName: 'Glean' }
+  );
 }
 
 // Google scraper using Playwright
 async function scrapeGoogle(limit: number = 30): Promise<Job[]> {
-  const browser = await chromium.launch({ headless: true });
-  const page = await browser.newPage();
+  return withRetry(
+    async () => {
+      return withBrowser(async (browser, page) => {
+        try {
+          await page.goto('https://careers.google.com/jobs/results/?q=software%20engineer',
+            { waitUntil: 'load', timeout: 60000 });
 
-  try {
-    await page.goto('https://careers.google.com/jobs/results/?q=software%20engineer',
-      { waitUntil: 'load', timeout: 60000 });
+          console.log('Google: Waiting for job listings to render...');
+          await page.waitForTimeout(15000);
 
-    console.log('Google: Waiting for job listings to render...');
-    await page.waitForTimeout(15000);
+          // Look for job listings with flexible matching
+          const jobs = await page.$$eval('a', links => {
+            const results: any[] = [];
+            links.forEach(link => {
+              const title = link.textContent?.trim() || '';
+              const url = link.href;
 
-    // Look for job listings with flexible matching
-    const jobs = await page.$$eval('a', links => {
-      const results: any[] = [];
-      links.forEach(link => {
-        const title = link.textContent?.trim() || '';
-        const url = link.href;
+              const hasJobKeywords = title.toLowerCase().match(/(engineer|developer|architect|scientist|manager|program|analyst)/);
+              const isJobLink = url.includes('careers.google.com/jobs/results/') && !url.endsWith('/jobs/results/');
+              const notNavLink = !title.toLowerCase().match(/(search|filter|google|home|about)/);
 
-        const hasJobKeywords = title.toLowerCase().match(/(engineer|developer|architect|scientist|manager|program|analyst)/);
-        const isJobLink = url.includes('careers.google.com/jobs/results/') && !url.endsWith('/jobs/results/');
-        const notNavLink = !title.toLowerCase().match(/(search|filter|google|home|about)/);
+              if (hasJobKeywords && isJobLink && notNavLink && title.length > 10) {
+                results.push({ title, url });
+              }
+            });
+            return results;
+          });
 
-        if (hasJobKeywords && isJobLink && notNavLink && title.length > 10) {
-          results.push({ title, url });
+          if (!jobs || jobs.length === 0) {
+            throw new Error('No jobs found on page');
+          }
+
+          const rawJobs = jobs
+            .slice(0, limit)
+            .map((job, index) => ({
+              id: `google-${job.url.split('/').filter(Boolean).pop() || index}`,
+              company: 'Google',
+              title: job.title,
+              team: '',
+              location: '',
+              posted: new Date().toISOString(),
+              snippet: '',
+              url: job.url,
+              matched: false,
+              matchScore: 0
+            }));
+
+          // Validate jobs
+          const validatedJobs = rawJobs
+            .map(job => validateAndSanitizeJob(job, 'Google'))
+            .filter((job): job is Job => job !== null);
+
+          if (validatedJobs.length === 0) {
+            throw new Error('No valid jobs after validation');
+          }
+
+          return validatedJobs;
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          throw new Error(`Google scraping failed: ${errorMessage}`);
         }
-      });
-      return results;
-    });
-
-    await browser.close();
-
-    return jobs
-      .slice(0, limit)
-      .map((job, index) => ({
-        id: `google-${job.url.split('/').filter(Boolean).pop() || index}`,
-        company: 'Google',
-        title: job.title,
-        team: '',
-        location: '',
-        posted: new Date().toISOString(),
-        snippet: '',
-        url: job.url,
-        matched: false,
-        matchScore: 0
-      }));
-  } catch (error) {
-    console.error('Error scraping Google:', error);
-    await browser.close();
-    return [];
-  }
+      }, 'Google');
+    },
+    { maxRetries: 1, retryDelay: 3000, timeoutMs: 75000, companyName: 'Google' }
+  );
 }
 
 // Meta scraper using Playwright
 async function scrapeMeta(limit: number = 30): Promise<Job[]> {
-  const browser = await chromium.launch({ headless: true });
-  const page = await browser.newPage();
+  return withRetry(
+    async () => {
+      return withBrowser(async (browser, page) => {
+        try {
+          await page.goto('https://www.metacareers.com/jobs?q=software%20engineer',
+            { waitUntil: 'load', timeout: 60000 });
 
-  try {
-    await page.goto('https://www.metacareers.com/jobs?q=software%20engineer',
-      { waitUntil: 'load', timeout: 60000 });
+          console.log('Meta: Waiting for job cards to render...');
+          await page.waitForTimeout(15000);
 
-    console.log('Meta: Waiting for job cards to render...');
-    await page.waitForTimeout(15000);
+          // Look for job listings with flexible matching
+          const jobs = await page.$$eval('a', links => {
+            const results: any[] = [];
+            links.forEach(link => {
+              const title = link.textContent?.trim() || '';
+              const url = link.href;
 
-    // Look for job listings with flexible matching
-    const jobs = await page.$$eval('a', links => {
-      const results: any[] = [];
-      links.forEach(link => {
-        const title = link.textContent?.trim() || '';
-        const url = link.href;
+              const hasJobKeywords = title.toLowerCase().match(/(engineer|developer|architect|scientist|manager|designer|analyst|program)/);
+              const isJobLink = url.includes('metacareers.com/jobs/') && !url.endsWith('/jobs/') && !url.endsWith('/jobs');
+              const notNavLink = !title.toLowerCase().match(/(meta careers|search|filter|home|about)/);
 
-        const hasJobKeywords = title.toLowerCase().match(/(engineer|developer|architect|scientist|manager|designer|analyst|program)/);
-        const isJobLink = url.includes('metacareers.com/jobs/') && !url.endsWith('/jobs/') && !url.endsWith('/jobs');
-        const notNavLink = !title.toLowerCase().match(/(meta careers|search|filter|home|about)/);
+              if (hasJobKeywords && isJobLink && notNavLink && title.length > 10) {
+                results.push({ title, url });
+              }
+            });
+            return results;
+          });
 
-        if (hasJobKeywords && isJobLink && notNavLink && title.length > 10) {
-          results.push({ title, url });
+          if (!jobs || jobs.length === 0) {
+            throw new Error('No jobs found on page');
+          }
+
+          const rawJobs = jobs
+            .slice(0, limit)
+            .map((job, index) => ({
+              id: `meta-${job.url.split('/').filter(Boolean).pop() || index}`,
+              company: 'Meta',
+              title: job.title,
+              team: '',
+              location: '',
+              posted: new Date().toISOString(),
+              snippet: '',
+              url: job.url,
+              matched: false,
+              matchScore: 0
+            }));
+
+          // Validate jobs
+          const validatedJobs = rawJobs
+            .map(job => validateAndSanitizeJob(job, 'Meta'))
+            .filter((job): job is Job => job !== null);
+
+          if (validatedJobs.length === 0) {
+            throw new Error('No valid jobs after validation');
+          }
+
+          return validatedJobs;
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          throw new Error(`Meta scraping failed: ${errorMessage}`);
         }
-      });
-      return results;
-    });
-
-    await browser.close();
-
-    return jobs
-      .slice(0, limit)
-      .map((job, index) => ({
-        id: `meta-${job.url.split('/').filter(Boolean).pop() || index}`,
-        company: 'Meta',
-        title: job.title,
-        team: '',
-        location: '',
-        posted: new Date().toISOString(),
-        snippet: '',
-        url: job.url,
-        matched: false,
-        matchScore: 0
-      }));
-  } catch (error) {
-    console.error('Error scraping Meta:', error);
-    await browser.close();
-    return [];
-  }
+      }, 'Meta');
+    },
+    { maxRetries: 1, retryDelay: 3000, timeoutMs: 75000, companyName: 'Meta' }
+  );
 }
 
 // Sentry scraper using Playwright
 async function scrapeSentry(limit: number = 30): Promise<Job[]> {
-  const browser = await chromium.launch({ headless: true });
-  const page = await browser.newPage();
+  return withRetry(
+    async () => {
+      return withBrowser(async (browser, page) => {
+        try {
+          await page.goto('https://sentry.io/careers/', { waitUntil: 'networkidle', timeout: 30000 });
 
-  try {
-    await page.goto('https://sentry.io/careers/', { waitUntil: 'networkidle', timeout: 30000 });
+          await page.waitForSelector('[class*="job"], [class*="position"], [role="link"]', { timeout: 10000 }).catch(() => {
+            console.log('Sentry: No job elements found');
+          });
 
-    await page.waitForSelector('[class*="job"], [class*="position"], [role="link"]', { timeout: 10000 }).catch(() => {
-      console.log('Sentry: No job elements found');
-    });
+          const jobs = await page.$$eval('a[href*="/careers/"]', (links) => {
+            return links.slice(0, 30).map((link) => {
+              const title = link.textContent?.trim() || '';
+              const url = link.href;
 
-    const jobs = await page.$$eval('a[href*="/careers/"]', (links) => {
-      return links.slice(0, 30).map((link) => {
-        const title = link.textContent?.trim() || '';
-        const url = link.href;
+              return { title, url };
+            });
+          }).catch(() => []);
 
-        return { title, url };
-      });
-    }).catch(() => []);
+          if (!jobs || jobs.length === 0) {
+            throw new Error('No jobs found on page');
+          }
 
-    await browser.close();
+          const rawJobs = jobs
+            .filter(job => job.title && job.url && !job.url.endsWith('/careers/'))
+            .map(job => ({
+              id: `sentry-${job.title.toLowerCase().replace(/\s+/g, '-')}`,
+              company: 'Sentry',
+              title: job.title,
+              team: '',
+              location: '',
+              posted: new Date().toISOString(),
+              snippet: '',
+              url: job.url,
+              matched: false,
+              matchScore: 0
+            }));
 
-    return jobs
-      .filter(job => job.title && job.url && !job.url.endsWith('/careers/'))
-      .map(job => ({
-        id: `sentry-${job.title.toLowerCase().replace(/\s+/g, '-')}`,
-        company: 'Sentry',
-        title: job.title,
-        team: '',
-        location: '',
-        posted: new Date().toISOString(),
-        snippet: '',
-        url: job.url,
-        matched: false,
-        matchScore: 0
-      }));
-  } catch (error) {
-    console.error('Error scraping Sentry:', error);
-    await browser.close();
-    return [];
-  }
+          // Validate jobs
+          const validatedJobs = rawJobs
+            .map(job => validateAndSanitizeJob(job, 'Sentry'))
+            .filter((job): job is Job => job !== null);
+
+          if (validatedJobs.length === 0) {
+            throw new Error('No valid jobs after validation');
+          }
+
+          return validatedJobs;
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          throw new Error(`Sentry scraping failed: ${errorMessage}`);
+        }
+      }, 'Sentry');
+    },
+    { maxRetries: 1, retryDelay: 3000, timeoutMs: 75000, companyName: 'Sentry' }
+  );
 }
 
 // Fallback sample jobs for companies that fail to scrape
@@ -578,53 +947,43 @@ function getFallbackJobs(company: string): Job[] {
   return fallbackData[company] || [];
 }
 
+// Safe scraper wrapper that catches errors and returns empty array
+async function safeScrape(scraperFn: () => Promise<Job[]>, companyName: string): Promise<Job[]> {
+  try {
+    const jobs = await scraperFn();
+    console.log(`${companyName}: ${jobs.length} jobs scraped`);
+    return jobs;
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error(`${companyName}: Scraping failed - ${errorMessage}`);
+
+    // Use fallback on error
+    const fallback = getFallbackJobs(companyName);
+    if (fallback.length > 0) {
+      console.log(`${companyName}: Using ${fallback.length} fallback jobs`);
+      return fallback;
+    }
+
+    return [];
+  }
+}
+
 // Scrape all non-Greenhouse companies
 async function scrapeOtherCompanies(): Promise<Job[]> {
   console.log('Scraping other companies with Playwright...');
 
-  const scrapers = [
-    scrapeOpenAI(30),
-    scrapeAmazon(30),
-    scrapeApple(30),
-    scrapeGlean(30),
-    scrapeGoogle(30),
-    scrapeMeta(30),
-    scrapeSentry(30)
-  ];
+  // Run all scrapers in parallel with safety wrappers
+  const results = await Promise.all([
+    safeScrape(() => scrapeOpenAI(30), 'OpenAI'),
+    safeScrape(() => scrapeAmazon(30), 'Amazon'),
+    safeScrape(() => scrapeApple(30), 'Apple'),
+    safeScrape(() => scrapeGlean(30), 'Glean'),
+    safeScrape(() => scrapeGoogle(30), 'Google'),
+    safeScrape(() => scrapeMeta(30), 'Meta'),
+    safeScrape(() => scrapeSentry(30), 'Sentry')
+  ]);
 
-  const results = await Promise.allSettled(scrapers);
-
-  const allJobs: Job[] = [];
-  results.forEach((result, index) => {
-    const companies = ['OpenAI', 'Amazon', 'Apple', 'Glean', 'Google', 'Meta', 'Sentry'];
-    const company = companies[index];
-
-    if (result.status === 'fulfilled') {
-      const jobs = result.value;
-      console.log(`${company}: ${jobs.length} jobs scraped`);
-
-      // Use fallback if no jobs found
-      if (jobs.length === 0) {
-        const fallback = getFallbackJobs(company);
-        if (fallback.length > 0) {
-          console.log(`${company}: Using ${fallback.length} fallback jobs`);
-          allJobs.push(...fallback);
-        }
-      } else {
-        allJobs.push(...jobs);
-      }
-    } else {
-      console.error(`${company}: Failed -`, result.reason?.message || result.reason);
-      // Try fallback on failure
-      const fallback = getFallbackJobs(company);
-      if (fallback.length > 0) {
-        console.log(`${company}: Using ${fallback.length} fallback jobs after error`);
-        allJobs.push(...fallback);
-      }
-    }
-  });
-
-  return allJobs;
+  return results.flat();
 }
 
 // Trigger job scraping
