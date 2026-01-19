@@ -444,12 +444,12 @@ async function scrapeOpenAI(limit: number = 500): Promise<Job[]> {
         try {
           console.log('OpenAI: Navigating to careers page...');
           await page.goto('https://openai.com/careers/search/', {
-            waitUntil: 'networkidle',
+            waitUntil: 'domcontentloaded',
             timeout: 60000
           });
 
           console.log('OpenAI: Waiting for content to render...');
-          await page.waitForTimeout(15000);
+          await page.waitForTimeout(25000);
 
           // Scroll to bottom to trigger lazy loading
           console.log('OpenAI: Scrolling to load all jobs...');
@@ -570,64 +570,82 @@ async function scrapeOpenAI(limit: number = 500): Promise<Job[]> {
   );
 }
 
-// Amazon scraper using Playwright
-async function scrapeAmazon(limit: number = 30): Promise<Job[]> {
+// Amazon scraper using JSON API
+async function scrapeAmazon(limit: number = 500): Promise<Job[]> {
   return withRetry(
     async () => {
-      return withBrowser(async (browser, page) => {
-        try {
-          await page.goto('https://www.amazon.jobs/en/search?base_query=software+engineer&loc_query=', { waitUntil: 'domcontentloaded', timeout: 45000 });
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
 
-          await page.waitForTimeout(3000);
+      try {
+        const allJobs: any[] = [];
+        const resultLimit = 100; // Amazon API allows max 100 per request
+        let offset = 0;
 
-          const jobs = await page.evaluate(() => {
-            const jobLinks = Array.from(document.querySelectorAll('a[href*="/jobs/"]'));
+        console.log(`Amazon: Fetching jobs via JSON API...`);
 
-            return jobLinks.slice(0, 30).map((link) => {
-              const el = link as HTMLAnchorElement;
-              const title = el.textContent?.trim() || '';
-              const url = el.href;
+        // Fetch jobs in batches
+        while (offset < limit) {
+          const url = `https://www.amazon.jobs/en/search.json?base_query=software+engineer&offset=${offset}&result_limit=${resultLimit}`;
 
-              return { title, url, id: url.split('/').pop() || '' };
-            }).filter(job => job.title && job.title.length > 5);
-          });
+          const response = await fetch(url, { signal: controller.signal });
+          clearTimeout(timeoutId);
 
-          if (!jobs || jobs.length === 0) {
-            throw new Error('No jobs found on page');
+          if (!response.ok) {
+            throw new Error(`Amazon API returned ${response.status}`);
           }
 
-          const rawJobs = jobs
-            .filter(job => job.title && job.url)
-            .map(job => ({
-              id: `amazon-${job.id || job.title.toLowerCase().replace(/\s+/g, '-')}`,
-              company: 'Amazon',
-              title: job.title,
-              team: '',
-              location: '',
-              posted: new Date().toISOString(),
-              snippet: '',
-              url: job.url.startsWith('http') ? job.url : `https://www.amazon.jobs${job.url}`,
-              matched: false,
-              matchScore: 0
-            }));
+          const data = await response.json();
 
-          // Validate jobs
-          const validatedJobs = rawJobs
-            .map(job => validateAndSanitizeJob(job, 'Amazon'))
-            .filter((job): job is Job => job !== null);
-
-          if (validatedJobs.length === 0) {
-            throw new Error('No valid jobs after validation');
+          if (!data.jobs || data.jobs.length === 0) {
+            break;
           }
 
-          return validatedJobs;
-        } catch (error) {
-          const errorMessage = error instanceof Error ? error.message : String(error);
-          throw new Error(`Amazon scraping failed: ${errorMessage}`);
+          allJobs.push(...data.jobs);
+          console.log(`Amazon: Fetched ${allJobs.length} jobs so far (total available: ${data.hits})`);
+
+          if (allJobs.length >= limit || data.jobs.length < resultLimit) {
+            break;
+          }
+
+          offset += resultLimit;
         }
-      }, 'Amazon');
+
+        console.log(`Amazon: Total fetched ${allJobs.length} jobs`);
+
+        const rawJobs = allJobs.slice(0, limit).map((job: any) => ({
+          id: `amazon-${job.id_icims}`,
+          company: 'Amazon',
+          title: job.title || '',
+          team: job.team || '',
+          location: job.location || '',
+          posted: job.posted_date || new Date().toISOString(),
+          snippet: job.description_short || '',
+          url: `https://www.amazon.jobs/en/jobs/${job.id_icims}`,
+          matched: false,
+          matchScore: 0
+        }));
+
+        // Validate jobs
+        const validatedJobs = rawJobs
+          .map(job => validateAndSanitizeJob(job, 'Amazon'))
+          .filter((job): job is Job => job !== null);
+
+        console.log(`Amazon: ${validatedJobs.length} valid jobs after validation`);
+
+        if (validatedJobs.length === 0) {
+          throw new Error('No valid jobs after validation');
+        }
+
+        return validatedJobs;
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        throw new Error(`Amazon scraping failed: ${errorMessage}`);
+      } finally {
+        clearTimeout(timeoutId);
+      }
     },
-    { maxRetries: 1, retryDelay: 3000, timeoutMs: 75000, companyName: 'Amazon' }
+    { maxRetries: 2, retryDelay: 3000, timeoutMs: 60000, companyName: 'Amazon' }
   );
 }
 
