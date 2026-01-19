@@ -47,6 +47,76 @@ app.get('/api/jobs', async (req, res) => {
   }
 });
 
+// Simple keyword-based matching
+function matchJob(job: any, preferences: any): { matched: boolean; matchScore: number } {
+  const lookingFor = (preferences?.lookingFor || '').toLowerCase();
+  const notLookingFor = (preferences?.notLookingFor || '').toLowerCase();
+  const jobText = `${job.title} ${job.team || ''} ${job.location || ''}`.toLowerCase();
+
+  // Extract key positive terms
+  const positiveTerms = [
+    'senior', 'staff', 'engineer', 'engineering', 'distributed', 'system',
+    'ai', 'infrastructure', 'backend', 'platform', 'workflow', 'orchestration'
+  ];
+
+  //Extract negative terms
+  const negativeTerms = [
+    'frontend', 'research', 'prompt-only', 'model training'
+  ];
+
+  let score = 0;
+  let matched = false;
+
+  // Check positive terms
+  for (const term of positiveTerms) {
+    if (jobText.includes(term)) {
+      score += 0.1;
+    }
+  }
+
+  // Check negative terms
+  for (const term of negativeTerms) {
+    if (jobText.includes(term)) {
+      score -= 0.3;
+    }
+  }
+
+  // Basic threshold
+  matched = score > 0.2;
+
+  return { matched, matchScore: Math.max(0, Math.min(1, score)) };
+}
+
+// Scrape Anthropic jobs from Greenhouse API
+async function scrapeAnthropic(): Promise<Job[]> {
+  try {
+    const response = await fetch('https://boards-api.greenhouse.io/v1/boards/anthropic/jobs');
+    const data = await response.json();
+
+    return data.jobs.slice(0, 50).map((job: any) => ({
+      id: `anthropic-${job.id}`,
+      company: 'Anthropic',
+      title: job.title,
+      team: job.departments?.[0]?.name || '',
+      location: job.location?.name || '',
+      posted: job.updated_at,
+      snippet: '',
+      url: job.absolute_url,
+      matched: false,
+      matchScore: 0
+    }));
+  } catch (error) {
+    console.error('Error scraping Anthropic:', error);
+    return [];
+  }
+}
+
+// Placeholder scrapers for other companies
+async function scrapeOtherCompanies(): Promise<Job[]> {
+  // Return empty for now - to be implemented
+  return [];
+}
+
 // Trigger job scraping
 app.post('/api/jobs/update', async (req, res) => {
   try {
@@ -55,24 +125,27 @@ app.post('/api/jobs/update', async (req, res) => {
     // Ensure data directory exists
     await mkdir(DATA_DIR, { recursive: true });
 
-    // For now, return mock data - we'll implement scraping in next iterations
-    const mockJobs: Job[] = [
-      {
-        id: 'anthropic-1',
-        company: 'Anthropic',
-        title: 'Senior AI Engineer',
-        team: 'Engineering',
-        location: 'San Francisco, CA',
-        posted: '2024-01-15',
-        snippet: 'Build AI systems at scale',
-        url: 'https://www.anthropic.com/careers',
-        matched: true,
-        matchScore: 0.85
-      }
-    ];
+    // Scrape jobs
+    console.log('Scraping Anthropic jobs...');
+    const anthropicJobs = await scrapeAnthropic();
+
+    console.log('Scraping other companies...');
+    const otherJobs = await scrapeOtherCompanies();
+
+    // Combine all jobs
+    let allJobs = [...anthropicJobs, ...otherJobs];
+
+    // Apply matching logic
+    allJobs = allJobs.map(job => {
+      const { matched, matchScore } = matchJob(job, preferences);
+      return { ...job, matched, matchScore };
+    });
+
+    // Filter to only matched jobs
+    const matchedJobs = allJobs.filter(job => job.matched);
 
     const result = {
-      jobs: mockJobs,
+      jobs: matchedJobs,
       lastUpdated: new Date().toISOString()
     };
 

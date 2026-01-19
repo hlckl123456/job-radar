@@ -10,25 +10,26 @@ This document tracks the careers page URLs and scraping strategies for each comp
 ---
 
 ## Anthropic
-- **Status**: TODO
+- **Status**: DONE
 - **Careers URL**: https://www.anthropic.com/careers
-- **JSON/API**: TBD
-- **Scraping Strategy**: TBD
-- **Notes**: To be researched in next iteration
+- **JSON/API**: Greenhouse API - `https://boards-api.greenhouse.io/v1/boards/anthropic/jobs`
+- **Scraping Strategy**: Direct JSON API call, no authentication required
+- **Fields Available**: title, location, departments, updated_at, absolute_url, id
+- **Notes**: 337+ jobs available. Fully implemented.
 
 ---
 
 ## OpenAI
-- **Status**: TODO
+- **Status**: TODO (Future iteration)
 - **Careers URL**: https://openai.com/careers
-- **JSON/API**: TBD
+- **JSON/API**: Not Greenhouse or Lever - needs further research
 - **Scraping Strategy**: TBD
-- **Notes**: To be researched in next iteration
+- **Notes**: Will require custom scraper or different ATS platform detection
 
 ---
 
 ## Amazon
-- **Status**: TODO
+- **Status**: TODO (Future iteration)
 - **Careers URL**: https://www.amazon.jobs
 - **JSON/API**: TBD
 - **Scraping Strategy**: TBD
@@ -37,16 +38,16 @@ This document tracks the careers page URLs and scraping strategies for each comp
 ---
 
 ## Stripe
-- **Status**: TODO
+- **Status**: TODO (Future iteration)
 - **Careers URL**: https://stripe.com/jobs
 - **JSON/API**: TBD
 - **Scraping Strategy**: TBD
-- **Notes**: To be researched in next iteration
+- **Notes**: To be researched
 
 ---
 
 ## Apple
-- **Status**: TODO
+- **Status**: TODO (Future iteration)
 - **Careers URL**: https://www.apple.com/careers
 - **JSON/API**: TBD
 - **Scraping Strategy**: TBD
@@ -55,34 +56,34 @@ This document tracks the careers page URLs and scraping strategies for each comp
 ---
 
 ## Databricks
-- **Status**: TODO
+- **Status**: TODO (Future iteration)
 - **Careers URL**: https://www.databricks.com/company/careers
 - **JSON/API**: TBD
 - **Scraping Strategy**: TBD
-- **Notes**: To be researched in next iteration
+- **Notes**: To be researched
 
 ---
 
 ## Glean
-- **Status**: TODO
+- **Status**: TODO (Future iteration)
 - **Careers URL**: https://glean.com/careers
 - **JSON/API**: TBD
 - **Scraping Strategy**: TBD
-- **Notes**: Smaller company, may use Greenhouse or Lever
+- **Notes**: May use Greenhouse or Lever
 
 ---
 
 ## Google
-- **Status**: TODO
+- **Status**: TODO (Future iteration)
 - **Careers URL**: https://careers.google.com
 - **JSON/API**: TBD
 - **Scraping Strategy**: TBD
-- **Notes**: Large ATS system
+- **Notes**: Large custom ATS
 
 ---
 
 ## Meta
-- **Status**: TODO
+- **Status**: TODO (Future iteration)
 - **Careers URL**: https://www.metacareers.com
 - **JSON/API**: TBD
 - **Scraping Strategy**: TBD
@@ -91,11 +92,11 @@ This document tracks the careers page URLs and scraping strategies for each comp
 ---
 
 ## Sentry
-- **Status**: TODO
+- **Status**: TODO (Future iteration)
 - **Careers URL**: https://sentry.io/careers
 - **JSON/API**: TBD
 - **Scraping Strategy**: TBD
-- **Notes**: Smaller company, may use standard ATS
+- **Notes**: May use standard ATS
 
 ---
 
