@@ -60,11 +60,10 @@ function matchJob(job: any, preferences: any): { matched: boolean; matchScore: n
   const notLookingFor = preferences?.notLookingFor?.toLowerCase() || '';
 
   let score = 0;
-  let maxPossibleScore = 0;
+  const maxPossibleScore = 1.4; // Fixed: 0.5 + 0.4 + 0.35 + 0.15 = 1.4 (phases 1-5, excluding location bonus)
 
   // === PHASE 1: User-defined positive preferences (highest priority) ===
   if (lookingFor) {
-    maxPossibleScore += 0.5;
     const userPositiveTerms = extractKeyTerms(lookingFor);
     const userPhrases = extractPhrases(lookingFor);
 
@@ -106,7 +105,6 @@ function matchJob(job: any, preferences: any): { matched: boolean; matchScore: n
   }
 
   // === PHASE 3: Built-in seniority matching (high weight) ===
-  maxPossibleScore += 0.4;
   const seniorityTerms = {
     high: ['staff', 'principal', 'distinguished', 'fellow'],
     medium: ['senior', 'lead', 'sr.', 'sr '],
@@ -132,7 +130,6 @@ function matchJob(job: any, preferences: any): { matched: boolean; matchScore: n
   score += seniorityScore;
 
   // === PHASE 4: Technical domain matching (medium weight) ===
-  maxPossibleScore += 0.35;
   const domainKeywords = {
     distributed_systems: ['distributed system', 'distributed computing', 'microservice', 'service mesh'],
     ai_ml: ['ai', 'machine learning', 'ml', 'llm', 'large language model', 'multi-agent'],
@@ -153,7 +150,6 @@ function matchJob(job: any, preferences: any): { matched: boolean; matchScore: n
   score += Math.min(0.35, domainScore);
 
   // === PHASE 5: Role type validation (required minimum) ===
-  maxPossibleScore += 0.15;
   const roleTypes = ['engineer', 'engineering', 'architect', 'developer', 'scientist', 'researcher'];
   let hasRoleType = false;
   for (const role of roleTypes) {
@@ -206,8 +202,8 @@ function matchJob(job: any, preferences: any): { matched: boolean; matchScore: n
   // Normalize score to 0-1 range
   const normalizedScore = Math.max(0, Math.min(1, score / maxPossibleScore));
 
-  // Match threshold: need at least 0.35 normalized score AND must have valid role type
-  const matched = normalizedScore >= 0.35 && hasRoleType && score > 0;
+  // Match threshold: need at least 0.25 normalized score AND must have valid role type
+  const matched = normalizedScore >= 0.25 && hasRoleType && score > 0;
 
   return { matched, matchScore: normalizedScore };
 }
