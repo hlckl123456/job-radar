@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Job Radar - Intelligent job aggregator that matches opportunities from 10+ tech companies using AI-powered scoring">
+    <meta property="og:title" content="Job Radar - Smart Job Discovery for Engineers">
+    <meta property="og:description" content="Stop manually checking 10+ career pages. Let AI find your next role.">
+    <meta property="og:type" content="website">
+    <title>Job Radar - AI-Powered Job Discovery for Engineers</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="nav">
+        <div class="nav-container">
+            <div class="nav-logo">
+                <span class="radar-icon">🎯</span>
+                <span class="logo-text">Job Radar</span>
+            </div>
+            <div class="nav-links">
+                <a href="#features" class="nav-link">Features</a>
+                <a href="#how-it-works" class="nav-link">How It Works</a>
+                <a href="#stats" class="nav-link">Stats</a>
+                <a href="https://github.com/hlckl123456/job-radar" target="_blank" class="nav-link">GitHub</a>
+                <a href="https://github.com/hlckl123456/job-radar#-quick-start" target="_blank" class="cta-button">Get Started</a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="hero-background"></div>
+        <div class="container">
+            <div class="hero-content">
+                <div class="hero-badge">
+                    <span class="badge-icon">✨</span>
+                    <span>7 Core Optimizations | 2026-01-19</span>
+                </div>
+                <h1 class="hero-title">
+                    Stop Manually Checking
+                    <span class="gradient-text">10+ Career Pages</span>
+                </h1>
+                <p class="hero-subtitle">
+                    Let AI-powered matching find your next engineering role.
+                    Scrapes from Anthropic, Stripe, OpenAI, Google, Meta, and more.
+                </p>
+                <div class="hero-stats">
+                    <div class="stat-item">
+                        <div class="stat-number">10+</div>
+                        <div class="stat-label">Tech Companies</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-number">8-Phase</div>
+                        <div class="stat-label">AI Scoring</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-number">25-30%</div>
+                        <div class="stat-label">Match Rate</div>
+                    </div>
+                </div>
+                <div class="hero-actions">
+                    <a href="https://github.com/hlckl123456/job-radar#-quick-start" target="_blank" class="primary-button">
+                        <span>Get Started Free</span>
+                        <span class="button-arrow">→</span>
+                    </a>
+                    <a href="#demo" class="secondary-button">
+                        <span>Watch Demo</span>
+                        <span class="play-icon">▶</span>
+                    </a>
+                </div>
+            </div>
+        </div>
+        <div class="scroll-indicator">
+            <div class="mouse"></div>
+            <span>Scroll to explore</span>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section id="features" class="features">
+        <div class="container">
+            <div class="section-header">
+                <span class="section-badge">Features</span>
+                <h2 class="section-title">Why Job Radar?</h2>
+                <p class="section-subtitle">Built for senior engineers who value their time</p>
+            </div>
+
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">🎯</div>
+                    <h3 class="feature-title">8-Phase AI Matching</h3>
+                    <p class="feature-description">
+                        Sophisticated algorithm weighs title matches 2x higher, filters unwanted roles,
+                        and scores based on seniority, technical domains, and your preferences.
+                    </p>
+                    <ul class="feature-list">
+                        <li>User preferences (positive & negative)</li>
+                        <li>Seniority detection (Staff/Principal/Senior)</li>
+                        <li>Technical domain matching</li>
+                        <li>Auto-disqualification of irrelevant roles</li>
+                    </ul>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-icon">🏢</div>
+                    <h3 class="feature-title">10+ Top Tech Companies</h3>
+                    <p class="feature-description">
+                        Automatically scrapes from Anthropic, Stripe, Databricks, OpenAI, Google,
+                        Meta, Amazon, Apple, Glean, and Sentry.
+                    </p>
+                    <ul class="feature-list">
+                        <li>Official APIs (Greenhouse) for accuracy</li>
+                        <li>JSearch API for hard-to-scrape sites</li>
+                        <li>Direct scraping with Playwright</li>
+                        <li>Cached data when APIs fail</li>
+                    </ul>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-icon">⭐</div>
+                    <h3 class="feature-title">Bookmark & Search</h3>
+                    <p class="feature-description">
+                        Save interesting jobs with one click, search by title or location,
+                        and filter to see only your bookmarked opportunities.
+                    </p>
+                    <ul class="feature-list">
+                        <li>Real-time search across all jobs</li>
+                        <li>Persistent bookmarks (localStorage)</li>
+                        <li>Special :saved command</li>
+                        <li>Auto-collapsed company lists</li>
+                    </ul>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-icon">🛡️</div>
+                    <h3 class="feature-title">Reliable & Fast</h3>
+                    <p class="feature-description">
+                        Smart caching preserves data when APIs fail, sequential execution
+                        avoids rate limits, and updates complete in 20-30 seconds.
+                    </p>
+                    <ul class="feature-list">
+                        <li>Data merge strategy for reliability</li>
+                        <li>Rate limit protection (1s delay)</li>
+                        <li>Filter: FULLTIME, last month only</li>
+                        <li>~40% fewer but more relevant jobs</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- How It Works Section -->
+    <section id="how-it-works" class="how-it-works">
+        <div class="container">
+            <div class="section-header">
+                <span class="section-badge">Process</span>
+                <h2 class="section-title">How It Works</h2>
+                <p class="section-subtitle">From scraping to your perfect match in 4 steps</p>
+            </div>
+
+            <div class="timeline">
+                <div class="timeline-item">
+                    <div class="timeline-number">01</div>
+                    <div class="timeline-content">
+                        <h3>Intelligent Scraping</h3>
+                        <p>
+                            Fetches jobs from 10+ companies using Greenhouse API, JSearch API,
+                            and Playwright. Filters for FULLTIME roles from the last month only.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="timeline-item">
+                    <div class="timeline-number">02</div>
+                    <div class="timeline-content">
+                        <h3>AI-Powered Scoring</h3>
+                        <p>
+                            8-phase algorithm analyzes title (2x weight), location, description.
+                            Scores based on seniority, domains, and your preferences. Threshold: 20%.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="timeline-item">
+                    <div class="timeline-number">03</div>
+                    <div class="timeline-content">
+                        <h3>Smart Filtering</h3>
+                        <p>
+                            Auto-disqualifies sales, research, frontend roles.
+                            Preserves cached data when APIs fail. Collapses all companies by default.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="timeline-item">
+                    <div class="timeline-number">04</div>
+                    <div class="timeline-content">
+                        <h3>Discover & Apply</h3>
+                        <p>
+                            Search, bookmark, and sort your matches. Click to visit company career
+                            pages. All preferences saved in localStorage.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Stats Section -->
+    <section id="stats" class="stats">
+        <div class="container">
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-icon">📊</div>
+                    <div class="stat-value">1,600+</div>
+                    <div class="stat-description">Jobs Scraped</div>
+                    <div class="stat-note">From 10 tech giants</div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon">🎯</div>
+                    <div class="stat-value">25-30%</div>
+                    <div class="stat-description">Match Rate</div>
+                    <div class="stat-note">Up from 18.5%</div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon">⚡</div>
+                    <div class="stat-value">20-30s</div>
+                    <div class="stat-description">Update Time</div>
+                    <div class="stat-note">Sequential API calls</div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon">🛡️</div>
+                    <div class="stat-value">100%</div>
+                    <div class="stat-description">Data Preserved</div>
+                    <div class="stat-note">When APIs fail</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Demo Section -->
+    <section id="demo" class="demo">
+        <div class="container">
+            <div class="section-header">
+                <span class="section-badge">Demo</span>
+                <h2 class="section-title">See It In Action</h2>
+                <p class="section-subtitle">Real-time job discovery and matching</p>
+            </div>
+
+            <div class="demo-container">
+                <div class="demo-video">
+                    <div class="video-placeholder">
+                        <div class="play-button">▶</div>
+                        <p>Demo Video Coming Soon</p>
+                        <p class="demo-note">Watch how Job Radar discovers and matches jobs in seconds</p>
+                    </div>
+                </div>
+
+                <div class="demo-features">
+                    <div class="demo-feature">
+                        <span class="check-icon">✓</span>
+                        <span>Real-time search across 1,600+ jobs</span>
+                    </div>
+                    <div class="demo-feature">
+                        <span class="check-icon">✓</span>
+                        <span>One-click bookmarking with localStorage</span>
+                    </div>
+                    <div class="demo-feature">
+                        <span class="check-icon">✓</span>
+                        <span>Smart filtering by location and match %</span>
+                    </div>
+                    <div class="demo-feature">
+                        <span class="check-icon">✓</span>
+                        <span>Collapsed view for quick overview</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Optimizations Section -->
+    <section class="optimizations">
+        <div class="container">
+            <div class="section-header">
+                <span class="section-badge">Latest Updates</span>
+                <h2 class="section-title">7 Core Optimizations</h2>
+                <p class="section-subtitle">Shipped on 2026-01-19</p>
+            </div>
+
+            <div class="optimizations-grid">
+                <div class="optimization-card">
+                    <div class="opt-number">1</div>
+                    <h4>JSearch API Optimization</h4>
+                    <p>Added FULLTIME + last month filters, 1s rate limit delay</p>
+                </div>
+
+                <div class="optimization-card">
+                    <div class="opt-number">2</div>
+                    <h4>Match Score Algorithm</h4>
+                    <p>Title matches 2x weight, threshold 0.25→0.20, snippet field</p>
+                </div>
+
+                <div class="optimization-card">
+                    <div class="opt-number">3</div>
+                    <h4>Search Functionality</h4>
+                    <p>Real-time search box, :saved command, filter by title/location</p>
+                </div>
+
+                <div class="optimization-card">
+                    <div class="opt-number">4</div>
+                    <h4>Bookmark Feature</h4>
+                    <p>⭐/☆ buttons, localStorage persistence, "Show Saved Only"</p>
+                </div>
+
+                <div class="optimization-card">
+                    <div class="opt-number">5</div>
+                    <h4>Sequential API Calls</h4>
+                    <p>Avoid 429 rate limit errors with one-by-one execution</p>
+                </div>
+
+                <div class="optimization-card">
+                    <div class="opt-number">6</div>
+                    <h4>Data Caching Strategy</h4>
+                    <p>Preserve old data when APIs fail, no more 0/0 displays</p>
+                </div>
+
+                <div class="optimization-card">
+                    <div class="opt-number">7</div>
+                    <h4>Auto-Collapse Companies</h4>
+                    <p>Default folded state after updates for better UX</p>
+                </div>
+            </div>
+
+            <div class="optimization-cta">
+                <a href="https://github.com/hlckl123456/job-radar/blob/main/docs/optimization-summary-2026-01-19-zh.md" target="_blank" class="secondary-button">
+                    Read Full Changelog
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section class="cta-section">
+        <div class="container">
+            <div class="cta-content">
+                <h2 class="cta-title">Ready to Find Your Next Role?</h2>
+                <p class="cta-subtitle">
+                    Stop wasting hours checking career pages.
+                    Let AI do the work for you.
+                </p>
+                <div class="cta-actions">
+                    <a href="https://github.com/hlckl123456/job-radar#-quick-start" target="_blank" class="primary-button large">
+                        <span>Get Started Free</span>
+                        <span class="button-arrow">→</span>
+                    </a>
+                    <a href="https://github.com/hlckl123456/job-radar" target="_blank" class="secondary-button large">
+                        <span>View on GitHub</span>
+                        <span class="github-icon">⭐</span>
+                    </a>
+                </div>
+                <p class="cta-note">
+                    Open source • MIT License • Built for engineers, by engineers
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-left">
+                    <div class="footer-logo">
+                        <span class="radar-icon">🎯</span>
+                        <span class="logo-text">Job Radar</span>
+                    </div>
+                    <p class="footer-description">
+                        AI-powered job discovery for senior engineers.
+                        Find opportunities from 10+ tech companies in seconds.
+                    </p>
+                </div>
+
+                <div class="footer-links">
+                    <div class="footer-column">
+                        <h4>Product</h4>
+                        <a href="#features">Features</a>
+                        <a href="#how-it-works">How It Works</a>
+                        <a href="#stats">Stats</a>
+                        <a href="#demo">Demo</a>
+                    </div>
+
+                    <div class="footer-column">
+                        <h4>Resources</h4>
+                        <a href="https://github.com/hlckl123456/job-radar" target="_blank">GitHub</a>
+                        <a href="https://github.com/hlckl123456/job-radar/blob/main/README-zh.md" target="_blank">文档 (中文)</a>
+                        <a href="https://github.com/hlckl123456/job-radar#-quick-start" target="_blank">Quick Start</a>
+                        <a href="https://github.com/hlckl123456/job-radar/blob/main/docs/optimization-summary-2026-01-19-zh.md" target="_blank">Changelog</a>
+                    </div>
+
+                    <div class="footer-column">
+                        <h4>Connect</h4>
+                        <a href="https://github.com/hlckl123456" target="_blank">GitHub Profile</a>
+                        <a href="https://github.com/hlckl123456/job-radar/issues" target="_blank">Report Issue</a>
+                        <a href="https://github.com/hlckl123456/job-radar/pulls" target="_blank">Contribute</a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="footer-bottom">
+                <p>&copy; 2026 Job Radar. Built with ❤️ and ☕ by Claude Code</p>
+                <p>Open Source • MIT License</p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>
