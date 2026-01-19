@@ -5,3 +5,17 @@ dist/
 data/jobs.json
 e2e/artifacts/
 .env
+
+# Test and debug files
+test-*.ts
+explore-*.ts
+*-debug.png
+scrapers-with-api.example.ts
+
+# Documentation drafts
+API-COMPARISON.md
+NEXT-STEPS.md
+preferences-guide.md
+
+# Local data
+data/

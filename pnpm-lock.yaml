@@ -6,7 +6,14 @@ settings:
 
 importers:
 
-  .: {}
+  .:
+    dependencies:
+      dotenv:
+        specifier: ^17.2.3
+        version: 17.2.3
+      tsx:
+        specifier: ^4.21.0
+        version: 4.21.0
 
   app/api:
     dependencies:
@@ -19,6 +26,12 @@ importers:
       playwright:
         specifier: ^1.40.0
         version: 1.57.0
+      playwright-extra:
+        specifier: ^4.3.6
+        version: 4.3.6(playwright-core@1.57.0)(playwright@1.57.0)
+      playwright-extra-plugin-stealth:
+        specifier: ^0.0.1
+        version: 0.0.1
     devDependencies:
       '@types/cors':
         specifier: ^2.8.17
@@ -807,6 +820,10 @@ packages:
     resolution: {integrity: sha512-2sJGJTaXIIaR1w4iJSNoN0hnMY7Gpc/n8D4qSCJw8QqFWXf7cuAgnEHxBpweaVcPevC2l3KpjYCx3NypQQgaJg==}
     engines: {node: '>= 0.8', npm: 1.2.8000 || >= 1.4.16}
 
+  dotenv@17.2.3:
+    resolution: {integrity: sha512-JVUnt+DUIzu87TABbhPmNfVdBDt18BLOWjMUFJMSi/Qqg7NTYtabbvSNJGOJ7afbRuv9D/lngizHtP7QyLQ+9w==}
+    engines: {node: '>=12'}
+
   dunder-proto@1.0.1:
     resolution: {integrity: sha512-KIN/nDJBQRcXw0MLVhZE9iQHmG68qAVIBg9CqmUYjmQIhgij9U5MFvrqkUL5FbtyyzZuOeOt0zdeRe4UY7ct+A==}
     engines: {node: '>= 0.4'}
@@ -1212,6 +1229,21 @@ packages:
     resolution: {integrity: sha512-agTcKlMw/mjBWOnD6kFZttAAGHgi/Nw0CZ2o6JqWSbMlI219lAFLZZCyqByTsvVAJq5XA5H8cA6PrvBRpBWEuQ==}
     engines: {node: '>=18'}
     hasBin: true
+
+  playwright-extra-plugin-stealth@0.0.1:
+    resolution: {integrity: sha512-eI0Ujf4MXbcupzlVEXaaOnb+Exjt1sFi7t/3KxIA5pVww+WRAXRWdhqTz0glX62jJq2YM8fLu+GyvULpjTpZrw==}
+
+  playwright-extra@4.3.6:
+    resolution: {integrity: sha512-q2rVtcE8V8K3vPVF1zny4pvwZveHLH8KBuVU2MoE3Jw4OKVoBWsHI9CH9zPydovHHOCDxjGN2Vg+2m644q3ijA==}
+    engines: {node: '>=12'}
+    peerDependencies:
+      playwright: '*'
+      playwright-core: '*'
+    peerDependenciesMeta:
+      playwright:
+        optional: true
+      playwright-core:
+        optional: true
 
   playwright@1.57.0:
     resolution: {integrity: sha512-ilYQj1s8sr2ppEJ2YVadYBN0Mb3mdo9J0wQ+UuDhzYqURwSoW4n1Xs5vs7ORwgDGmyEh33tRMeS8KhdkMoLXQw==}
@@ -2146,6 +2178,8 @@ snapshots:
 
   destroy@1.2.0: {}
 
+  dotenv@17.2.3: {}
+
   dunder-proto@1.0.1:
     dependencies:
       call-bind-apply-helpers: 1.0.2
@@ -2566,6 +2600,17 @@ snapshots:
   picomatch@4.0.3: {}
 
   playwright-core@1.57.0: {}
+
+  playwright-extra-plugin-stealth@0.0.1: {}
+
+  playwright-extra@4.3.6(playwright-core@1.57.0)(playwright@1.57.0):
+    dependencies:
+      debug: 4.4.3
+    optionalDependencies:
+      playwright: 1.57.0
+      playwright-core: 1.57.0
+    transitivePeerDependencies:
+      - supports-color
 
   playwright@1.57.0:
     dependencies:
