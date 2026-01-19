@@ -184,3 +184,11 @@ tr.unmatched:hover {
   background-color: #fafafa;
   opacity: 0.8;
 }
+
+/* Fixed width for Match column to prevent wrapping */
+th.match-column,
+td.match-column {
+  min-width: 90px;
+  width: 90px;
+  white-space: nowrap;
+}

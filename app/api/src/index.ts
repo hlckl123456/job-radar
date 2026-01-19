@@ -5,6 +5,7 @@ import { existsSync } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { chromium } from 'playwright';
+import 'dotenv/config';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -29,6 +30,7 @@ interface Job {
   posted?: string;
   snippet?: string;
   url: string;
+  employmentType?: string;
   matchScore?: number;
   matched: boolean;
 }
@@ -53,35 +55,46 @@ function matchJob(job: any, preferences: any): { matched: boolean; matchScore: n
   const titleLower = job.title.toLowerCase();
   const teamLower = (job.team || '').toLowerCase();
   const locationLower = (job.location || '').toLowerCase();
-  const jobText = `${titleLower} ${teamLower} ${locationLower}`;
+  const snippetLower = (job.snippet || '').toLowerCase();
+
+  // Separate title and other text for weighted scoring
+  const titleText = titleLower;
+  const otherText = `${teamLower} ${locationLower} ${snippetLower}`;
+  const jobText = `${titleText} ${otherText}`;
 
   // Parse user preferences if available
   const lookingFor = preferences?.lookingFor?.toLowerCase() || '';
   const notLookingFor = preferences?.notLookingFor?.toLowerCase() || '';
 
   let score = 0;
-  const maxPossibleScore = 1.4; // Fixed: 0.5 + 0.4 + 0.35 + 0.15 = 1.4 (phases 1-5, excluding location bonus)
+  const maxPossibleScore = 2.0; // ✨ Increased to account for weighted scoring
 
   // === PHASE 1: User-defined positive preferences (highest priority) ===
   if (lookingFor) {
     const userPositiveTerms = extractKeyTerms(lookingFor);
     const userPhrases = extractPhrases(lookingFor);
 
-    // Check phrases first (exact multi-word matches) - 0.25 points each
+    // Check phrases in TITLE first (exact multi-word matches) - 0.5 points each (2x weight)
     for (const phrase of userPhrases) {
-      if (jobText.includes(phrase)) {
-        score += 0.25;
+      if (titleText.includes(phrase)) {
+        score += 0.5;  // ✨ 2x weight for title matches
+      } else if (otherText.includes(phrase)) {
+        score += 0.25; // 1x weight for other matches
       }
     }
 
-    // Check individual terms - 0.1 points each, up to 0.25 total
+    // Check individual terms - weighted by where they appear
     let userTermScore = 0;
     for (const term of userPositiveTerms) {
-      if (jobText.includes(term) && !userPhrases.some(p => p.includes(term))) {
-        userTermScore += 0.1;
+      if (!userPhrases.some(p => p.includes(term))) {
+        if (titleText.includes(term)) {
+          userTermScore += 0.2;  // ✨ 2x weight for title
+        } else if (otherText.includes(term)) {
+          userTermScore += 0.1;  // 1x weight for other
+        }
       }
     }
-    score += Math.min(0.25, userTermScore);
+    score += Math.min(0.5, userTermScore);  // ✨ Increased cap
   }
 
   // === PHASE 2: User-defined negative preferences (can disqualify) ===
@@ -202,8 +215,9 @@ function matchJob(job: any, preferences: any): { matched: boolean; matchScore: n
   // Normalize score to 0-1 range
   const normalizedScore = Math.max(0, Math.min(1, score / maxPossibleScore));
 
-  // Match threshold: need at least 0.25 normalized score AND must have valid role type
-  const matched = normalizedScore >= 0.25 && hasRoleType && score > 0;
+  // ✨ Lowered threshold from 0.25 to 0.20 to catch more relevant jobs
+  // Match threshold: need at least 0.20 normalized score AND must have valid role type
+  const matched = normalizedScore >= 0.20 && hasRoleType && score > 0;
 
   return { matched, matchScore: normalizedScore };
 }
@@ -403,22 +417,87 @@ async function scrapeGreenhouseCompanies(): Promise<Job[]> {
 // Safe browser wrapper with proper cleanup
 async function withBrowser<T>(
   fn: (browser: any, page: any) => Promise<T>,
-  companyName: string
+  companyName: string,
+  useStealth: boolean = false
 ): Promise<T> {
   let browser = null;
   let page = null;
 
   try {
-    browser = await chromium.launch({
+    const launchOptions: any = {
       headless: true,
       args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
-    });
+    };
 
-    page = await browser.newPage();
+    // Enhanced stealth mode for bot detection bypass
+    if (useStealth) {
+      launchOptions.args.push(
+        '--disable-blink-features=AutomationControlled',
+        '--disable-features=IsolateOrigins,site-per-process',
+        '--disable-web-security'
+      );
+    }
+
+    browser = await chromium.launch(launchOptions);
+
+    const contextOptions: any = {
+      viewport: { width: 1920, height: 1080 },
+      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+      locale: 'en-US',
+      timezoneId: 'America/New_York'
+    };
+
+    // Additional stealth context options
+    if (useStealth) {
+      contextOptions.extraHTTPHeaders = {
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Sec-Fetch-Dest': 'document',
+        'Sec-Fetch-Mode': 'navigate',
+        'Sec-Fetch-Site': 'none',
+        'Upgrade-Insecure-Requests': '1'
+      };
+    }
+
+    const context = await browser.newContext(contextOptions);
+
+    // Hide webdriver flags for stealth mode
+    if (useStealth) {
+      await context.addInitScript(() => {
+        // Override navigator.webdriver
+        Object.defineProperty(navigator, 'webdriver', {
+          get: () => undefined
+        });
+
+        // Override chrome property
+        (window as any).chrome = {
+          runtime: {}
+        };
+
+        // Override permissions
+        const originalQuery = window.navigator.permissions.query;
+        window.navigator.permissions.query = (parameters: any) => (
+          parameters.name === 'notifications' ?
+            Promise.resolve({ state: 'denied' } as PermissionStatus) :
+            originalQuery(parameters)
+        );
+
+        // Mock plugins
+        Object.defineProperty(navigator, 'plugins', {
+          get: () => [1, 2, 3, 4, 5]
+        });
+
+        // Mock languages
+        Object.defineProperty(navigator, 'languages', {
+          get: () => ['en-US', 'en']
+        });
+      });
+    }
+
+    page = await context.newPage();
 
     // Set reasonable defaults
     await page.setDefaultTimeout(45000);
-    await page.setViewportSize({ width: 1280, height: 720 });
 
     const result = await fn(browser, page);
     return result;
@@ -436,490 +515,123 @@ async function withBrowser<T>(
   }
 }
 
-// OpenAI scraper with enhanced error handling
-async function scrapeOpenAI(limit: number = 500): Promise<Job[]> {
-  return withRetry(
-    async () => {
-      return withBrowser(async (browser, page) => {
-        try {
-          console.log('OpenAI: Navigating to careers page...');
-          await page.goto('https://openai.com/careers/search/', {
-            waitUntil: 'domcontentloaded',
-            timeout: 60000
-          });
-
-          console.log('OpenAI: Waiting for content to render...');
-          await page.waitForTimeout(25000);
-
-          // Scroll to bottom to trigger lazy loading
-          console.log('OpenAI: Scrolling to load all jobs...');
-          await page.evaluate(async () => {
-            await new Promise<void>((resolve) => {
-              let totalHeight = 0;
-              const distance = 500;
-              const timer = setInterval(() => {
-                const scrollHeight = document.documentElement.scrollHeight;
-                window.scrollBy(0, distance);
-                totalHeight += distance;
-
-                if (totalHeight >= scrollHeight) {
-                  clearInterval(timer);
-                  resolve();
-                }
-              }, 200);
-            });
-          });
-
-          // Wait for any additional content to load
-          await page.waitForTimeout(3000);
-
-          // Extract all job cards
-          const jobs = await page.evaluate(() => {
-            const results: any[] = [];
-
-            // Strategy 1: Look for elements with job-related data attributes or classes
-            const jobCards = document.querySelectorAll('[data-job], [data-role], .job-card, .role-card, article, [role="article"]');
-
-            jobCards.forEach(card => {
-              const link = card.querySelector('a[href*="/careers/"]');
-              if (link) {
-                const href = link.getAttribute('href') || '';
-                const title = link.textContent?.trim() || card.querySelector('h2, h3, .title')?.textContent?.trim() || '';
-
-                if (href && title && title.length > 3 &&
-                    !href.endsWith('/careers/') &&
-                    !href.endsWith('/careers/search') &&
-                    !href.endsWith('/careers/search/')) {
-
-                  const fullUrl = href.startsWith('http') ? href : `https://openai.com${href}`;
-                  results.push({ title, url: fullUrl });
-                }
-              }
-            });
-
-            // Strategy 2: Find all links with /careers/ in href and extract meaningful titles
-            if (results.length === 0) {
-              const allLinks = Array.from(document.querySelectorAll('a[href*="/careers/"]'));
-
-              allLinks.forEach(link => {
-                const href = link.getAttribute('href') || '';
-                const text = link.textContent?.trim() || '';
-
-                // Filter out navigation links
-                if (text.length > 10 &&
-                    !href.endsWith('/careers/') &&
-                    !href.endsWith('/careers/search') &&
-                    !href.endsWith('/careers/search/') &&
-                    !text.toLowerCase().includes('view all') &&
-                    !text.toLowerCase().includes('see all') &&
-                    !text.toLowerCase().includes('learn more') &&
-                    !text.toLowerCase().includes('apply now')) {
-
-                  const fullUrl = href.startsWith('http') ? href : `https://openai.com${href}`;
-                  results.push({ title: text, url: fullUrl });
-                }
-              });
-            }
-
-            // Deduplicate by URL
-            const uniqueJobs = Array.from(
-              new Map(results.map(job => [job.url, job])).values()
-            );
-
-            return uniqueJobs;
-          });
-
-          console.log(`OpenAI: Found ${jobs.length} job listings`);
-
-          if (!jobs || jobs.length === 0) {
-            throw new Error(`No jobs found on page`);
-          }
-
-          const rawJobs = jobs.slice(0, limit).map((job, index) => ({
-            id: `openai-${job.url.split('/').filter(Boolean).pop() || index}`,
-            company: 'OpenAI',
-            title: job.title,
-            team: '',
-            location: '',
-            posted: new Date().toISOString(),
-            snippet: '',
-            url: job.url,
-            matched: false,
-            matchScore: 0
-          }));
-
-          // Validate jobs
-          const validatedJobs = rawJobs
-            .map(job => validateAndSanitizeJob(job, 'OpenAI'))
-            .filter((job): job is Job => job !== null);
-
-          console.log(`OpenAI: ${validatedJobs.length} valid jobs after validation`);
-
-          if (validatedJobs.length === 0) {
-            throw new Error('No valid jobs after validation');
-          }
-
-          return validatedJobs;
-        } catch (error) {
-          const errorMessage = error instanceof Error ? error.message : String(error);
-          throw new Error(`OpenAI scraping failed: ${errorMessage}`);
-        }
-      }, 'OpenAI');
-    },
-    { maxRetries: 1, retryDelay: 3000, timeoutMs: 120000, companyName: 'OpenAI' }
-  );
+// JSearch API helper function
+interface JSearchJob {
+  job_id: string;
+  job_title: string;
+  employer_name: string;
+  job_city?: string;
+  job_state?: string;
+  job_country?: string;
+  job_description?: string;
+  job_apply_link?: string;
+  job_posted_at_datetime_utc?: string;
+  job_employment_type?: string;
 }
 
-// Amazon scraper using JSON API
-async function scrapeAmazon(limit: number = 500): Promise<Job[]> {
-  return withRetry(
-    async () => {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000);
+async function scrapeWithJSearch(
+  companyName: string,
+  query: string,
+  numPages: number = 5
+): Promise<Job[]> {
+  const API_KEY = process.env.RAPIDAPI_KEY;
 
-      try {
-        const allJobs: any[] = [];
-        const resultLimit = 100; // Amazon API allows max 100 per request
-        let offset = 0;
+  if (!API_KEY) {
+    console.warn(`${companyName}: RAPIDAPI_KEY not found, returning empty results`);
+    return [];
+  }
 
-        console.log(`Amazon: Fetching jobs via JSON API...`);
+  try {
+    // Add 1 second delay to avoid rate limiting
+    await new Promise(resolve => setTimeout(resolve, 1000));
 
-        // Fetch jobs in batches
-        while (offset < limit) {
-          const url = `https://www.amazon.jobs/en/search.json?base_query=software+engineer&offset=${offset}&result_limit=${resultLimit}`;
+    const params = new URLSearchParams({
+      query,
+      page: '1',
+      num_pages: numPages.toString(),
+      date_posted: 'month',           // ✨ Only get jobs from last month
+      employment_types: 'FULLTIME'    // ✨ Filter out intern, contractor, part-time
+    });
 
-          const response = await fetch(url, { signal: controller.signal });
-          clearTimeout(timeoutId);
+    const url = `https://jsearch.p.rapidapi.com/search?${params.toString()}`;
 
-          if (!response.ok) {
-            throw new Error(`Amazon API returned ${response.status}`);
-          }
-
-          const data = await response.json();
-
-          if (!data.jobs || data.jobs.length === 0) {
-            break;
-          }
-
-          allJobs.push(...data.jobs);
-          console.log(`Amazon: Fetched ${allJobs.length} jobs so far (total available: ${data.hits})`);
-
-          if (allJobs.length >= limit || data.jobs.length < resultLimit) {
-            break;
-          }
-
-          offset += resultLimit;
-        }
-
-        console.log(`Amazon: Total fetched ${allJobs.length} jobs`);
-
-        const rawJobs = allJobs.slice(0, limit).map((job: any) => ({
-          id: `amazon-${job.id_icims}`,
-          company: 'Amazon',
-          title: job.title || '',
-          team: job.team || '',
-          location: job.location || '',
-          posted: job.posted_date || new Date().toISOString(),
-          snippet: job.description_short || '',
-          url: `https://www.amazon.jobs/en/jobs/${job.id_icims}`,
-          matched: false,
-          matchScore: 0
-        }));
-
-        // Validate jobs
-        const validatedJobs = rawJobs
-          .map(job => validateAndSanitizeJob(job, 'Amazon'))
-          .filter((job): job is Job => job !== null);
-
-        console.log(`Amazon: ${validatedJobs.length} valid jobs after validation`);
-
-        if (validatedJobs.length === 0) {
-          throw new Error('No valid jobs after validation');
-        }
-
-        return validatedJobs;
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        throw new Error(`Amazon scraping failed: ${errorMessage}`);
-      } finally {
-        clearTimeout(timeoutId);
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'X-RapidAPI-Key': API_KEY,
+        'X-RapidAPI-Host': 'jsearch.p.rapidapi.com'
       }
-    },
-    { maxRetries: 2, retryDelay: 3000, timeoutMs: 60000, companyName: 'Amazon' }
-  );
+    });
+
+    if (!response.ok) {
+      throw new Error(`JSearch API returned ${response.status}`);
+    }
+
+    const data = await response.json();
+    const jobs: JSearchJob[] = data.data || [];
+
+    // Filter to ensure we only get jobs from the target company
+    const filteredJobs = jobs.filter(job =>
+      job.employer_name.toLowerCase().includes(companyName.toLowerCase())
+    );
+
+    console.log(`${companyName}: Found ${filteredJobs.length} jobs via JSearch API`);
+
+    return filteredJobs.map((job) => {
+      const location = [job.job_city, job.job_state, job.job_country]
+        .filter(Boolean)
+        .join(', ') || 'Location not specified';
+
+      return {
+        id: job.job_id,
+        title: job.job_title,
+        company: companyName,
+        location,
+        snippet: job.job_description?.substring(0, 200) || '',
+        url: job.job_apply_link || '',
+        posted: job.job_posted_at_datetime_utc || new Date().toISOString(),
+        matched: false
+      };
+    });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error(`${companyName}: JSearch API error: ${errorMessage}`);
+    return [];
+  }
 }
 
-// Apple scraper using Playwright
-async function scrapeApple(limit: number = 30): Promise<Job[]> {
-  return withRetry(
-    async () => {
-      return withBrowser(async (browser, page) => {
-        try {
-          await page.goto('https://jobs.apple.com/en-us/search?team=apps-and-frameworks-SFTWR-AF+cloud-and-infrastructure-SFTWR-CLD',
-            { waitUntil: 'load', timeout: 60000 });
-
-          console.log('Apple: Waiting for table to render...');
-          await page.waitForTimeout(15000);
-
-          // Extract all links that go to job details
-          const jobs = await page.$$eval('a', links => {
-            return links
-              .map(link => ({
-                title: link.textContent?.trim() || '',
-                url: link.href
-              }))
-              .filter(job =>
-                (job.url.includes('/en-us/details/') || job.url.includes('/search/')) &&
-                job.title.length > 10 &&
-                !job.title.toLowerCase().includes('search jobs') &&
-                !job.title.toLowerCase().includes('apple')
-              );
-          });
-
-          if (!jobs || jobs.length === 0) {
-            throw new Error('No jobs found on page');
-          }
-
-          const rawJobs = jobs
-            .slice(0, limit)
-            .map((job, index) => ({
-              id: `apple-${job.url.split('/').filter(Boolean).pop() || index}`,
-              company: 'Apple',
-              title: job.title,
-              team: '',
-              location: '',
-              posted: new Date().toISOString(),
-              snippet: '',
-              url: job.url.startsWith('http') ? job.url : `https://jobs.apple.com${job.url}`,
-              matched: false,
-              matchScore: 0
-            }));
-
-          // Validate jobs
-          const validatedJobs = rawJobs
-            .map(job => validateAndSanitizeJob(job, 'Apple'))
-            .filter((job): job is Job => job !== null);
-
-          if (validatedJobs.length === 0) {
-            throw new Error('No valid jobs after validation');
-          }
-
-          return validatedJobs;
-        } catch (error) {
-          const errorMessage = error instanceof Error ? error.message : String(error);
-          throw new Error(`Apple scraping failed: ${errorMessage}`);
-        }
-      }, 'Apple');
-    },
-    { maxRetries: 1, retryDelay: 3000, timeoutMs: 75000, companyName: 'Apple' }
-  );
+// OpenAI scraper using JSearch API
+async function scrapeOpenAI(limit: number = 500): Promise<Job[]> {
+  return scrapeWithJSearch('OpenAI', 'software engineer OpenAI', 5);
 }
 
-// Glean scraper using Playwright
-async function scrapeGlean(limit: number = 30): Promise<Job[]> {
-  return withRetry(
-    async () => {
-      return withBrowser(async (browser, page) => {
-        try {
-          await page.goto('https://glean.com/careers#open-positions', { waitUntil: 'networkidle', timeout: 30000 });
-
-          await page.waitForSelector('[class*="job"], [class*="position"]', { timeout: 10000 }).catch(() => {
-            console.log('Glean: No job elements found');
-          });
-
-          const jobs = await page.$$eval('[class*="job"], [class*="position"]', (elements) => {
-            return elements.slice(0, 30).map((el) => {
-              const titleEl = el.querySelector('h3, h4, [class*="title"]');
-              const locationEl = el.querySelector('[class*="location"]');
-              const linkEl = el.querySelector('a');
-
-              return {
-                title: titleEl?.textContent?.trim() || '',
-                location: locationEl?.textContent?.trim() || '',
-                url: linkEl?.href || ''
-              };
-            });
-          }).catch(() => []);
-
-          if (!jobs || jobs.length === 0) {
-            throw new Error('No jobs found on page');
-          }
-
-          const rawJobs = jobs
-            .filter(job => job.title && job.url)
-            .map(job => ({
-              id: `glean-${job.title.toLowerCase().replace(/\s+/g, '-')}`,
-              company: 'Glean',
-              title: job.title,
-              team: '',
-              location: job.location,
-              posted: new Date().toISOString(),
-              snippet: '',
-              url: job.url,
-              matched: false,
-              matchScore: 0
-            }));
-
-          // Validate jobs
-          const validatedJobs = rawJobs
-            .map(job => validateAndSanitizeJob(job, 'Glean'))
-            .filter((job): job is Job => job !== null);
-
-          if (validatedJobs.length === 0) {
-            throw new Error('No valid jobs after validation');
-          }
-
-          return validatedJobs;
-        } catch (error) {
-          const errorMessage = error instanceof Error ? error.message : String(error);
-          throw new Error(`Glean scraping failed: ${errorMessage}`);
-        }
-      }, 'Glean');
-    },
-    { maxRetries: 1, retryDelay: 3000, timeoutMs: 75000, companyName: 'Glean' }
-  );
+// Amazon scraper using JSearch API
+async function scrapeAmazon(limit: number = 2000): Promise<Job[]> {
+  return scrapeWithJSearch('Amazon', 'software engineer Amazon', 5);
 }
 
-// Google scraper using Playwright
-async function scrapeGoogle(limit: number = 30): Promise<Job[]> {
-  return withRetry(
-    async () => {
-      return withBrowser(async (browser, page) => {
-        try {
-          await page.goto('https://careers.google.com/jobs/results/?q=software%20engineer',
-            { waitUntil: 'load', timeout: 60000 });
-
-          console.log('Google: Waiting for job listings to render...');
-          await page.waitForTimeout(15000);
-
-          // Look for job listings with flexible matching
-          const jobs = await page.$$eval('a', links => {
-            const results: any[] = [];
-            links.forEach(link => {
-              const title = link.textContent?.trim() || '';
-              const url = link.href;
-
-              const hasJobKeywords = title.toLowerCase().match(/(engineer|developer|architect|scientist|manager|program|analyst)/);
-              const isJobLink = url.includes('careers.google.com/jobs/results/') && !url.endsWith('/jobs/results/');
-              const notNavLink = !title.toLowerCase().match(/(search|filter|google|home|about)/);
-
-              if (hasJobKeywords && isJobLink && notNavLink && title.length > 10) {
-                results.push({ title, url });
-              }
-            });
-            return results;
-          });
-
-          if (!jobs || jobs.length === 0) {
-            throw new Error('No jobs found on page');
-          }
-
-          const rawJobs = jobs
-            .slice(0, limit)
-            .map((job, index) => ({
-              id: `google-${job.url.split('/').filter(Boolean).pop() || index}`,
-              company: 'Google',
-              title: job.title,
-              team: '',
-              location: '',
-              posted: new Date().toISOString(),
-              snippet: '',
-              url: job.url,
-              matched: false,
-              matchScore: 0
-            }));
-
-          // Validate jobs
-          const validatedJobs = rawJobs
-            .map(job => validateAndSanitizeJob(job, 'Google'))
-            .filter((job): job is Job => job !== null);
-
-          if (validatedJobs.length === 0) {
-            throw new Error('No valid jobs after validation');
-          }
-
-          return validatedJobs;
-        } catch (error) {
-          const errorMessage = error instanceof Error ? error.message : String(error);
-          throw new Error(`Google scraping failed: ${errorMessage}`);
-        }
-      }, 'Google');
-    },
-    { maxRetries: 1, retryDelay: 3000, timeoutMs: 75000, companyName: 'Google' }
-  );
+// Apple scraper using JSearch API
+async function scrapeApple(limit: number = 1000): Promise<Job[]> {
+  return scrapeWithJSearch('Apple', 'software engineer Apple', 5);
 }
 
-// Meta scraper using Playwright
-async function scrapeMeta(limit: number = 30): Promise<Job[]> {
-  return withRetry(
-    async () => {
-      return withBrowser(async (browser, page) => {
-        try {
-          await page.goto('https://www.metacareers.com/jobs?q=software%20engineer',
-            { waitUntil: 'load', timeout: 60000 });
+// Glean scraper using JSearch API
+async function scrapeGlean(limit: number = 1000): Promise<Job[]> {
+  return scrapeWithJSearch('Glean', 'software engineer Glean', 5);
+}
 
-          console.log('Meta: Waiting for job cards to render...');
-          await page.waitForTimeout(15000);
+// Google scraper using JSearch API
+async function scrapeGoogle(limit: number = 1000): Promise<Job[]> {
+  return scrapeWithJSearch('Google', 'software engineer Google', 5);
+}
 
-          // Look for job listings with flexible matching
-          const jobs = await page.$$eval('a', links => {
-            const results: any[] = [];
-            links.forEach(link => {
-              const title = link.textContent?.trim() || '';
-              const url = link.href;
-
-              const hasJobKeywords = title.toLowerCase().match(/(engineer|developer|architect|scientist|manager|designer|analyst|program)/);
-              const isJobLink = url.includes('metacareers.com/jobs/') && !url.endsWith('/jobs/') && !url.endsWith('/jobs');
-              const notNavLink = !title.toLowerCase().match(/(meta careers|search|filter|home|about)/);
-
-              if (hasJobKeywords && isJobLink && notNavLink && title.length > 10) {
-                results.push({ title, url });
-              }
-            });
-            return results;
-          });
-
-          if (!jobs || jobs.length === 0) {
-            throw new Error('No jobs found on page');
-          }
-
-          const rawJobs = jobs
-            .slice(0, limit)
-            .map((job, index) => ({
-              id: `meta-${job.url.split('/').filter(Boolean).pop() || index}`,
-              company: 'Meta',
-              title: job.title,
-              team: '',
-              location: '',
-              posted: new Date().toISOString(),
-              snippet: '',
-              url: job.url,
-              matched: false,
-              matchScore: 0
-            }));
-
-          // Validate jobs
-          const validatedJobs = rawJobs
-            .map(job => validateAndSanitizeJob(job, 'Meta'))
-            .filter((job): job is Job => job !== null);
-
-          if (validatedJobs.length === 0) {
-            throw new Error('No valid jobs after validation');
-          }
-
-          return validatedJobs;
-        } catch (error) {
-          const errorMessage = error instanceof Error ? error.message : String(error);
-          throw new Error(`Meta scraping failed: ${errorMessage}`);
-        }
-      }, 'Meta');
-    },
-    { maxRetries: 1, retryDelay: 3000, timeoutMs: 75000, companyName: 'Meta' }
-  );
+// Meta scraper using JSearch API
+async function scrapeMeta(limit: number = 1000): Promise<Job[]> {
+  return scrapeWithJSearch('Meta', 'software engineer Meta', 5);
 }
 
 // Sentry scraper using Playwright
-async function scrapeSentry(limit: number = 30): Promise<Job[]> {
+async function scrapeSentry(limit: number = 1000): Promise<Job[]> {
   return withRetry(
     async () => {
       return withBrowser(async (browser, page) => {
@@ -945,18 +657,30 @@ async function scrapeSentry(limit: number = 30): Promise<Job[]> {
 
           const rawJobs = jobs
             .filter(job => job.title && job.url && !job.url.endsWith('/careers/'))
-            .map(job => ({
-              id: `sentry-${job.title.toLowerCase().replace(/\s+/g, '-')}`,
-              company: 'Sentry',
-              title: job.title,
-              team: '',
-              location: '',
-              posted: new Date().toISOString(),
-              snippet: '',
-              url: job.url,
-              matched: false,
-              matchScore: 0
-            }));
+            .map(job => {
+              // Extract location from title (format: "Job TitleLocation" - NO SPACE between title and location)
+              // Location patterns: "San Francisco, California", "Toronto, Ontario, Canada", "Amsterdam, Netherlands", etc.
+              const titleText = job.title;
+
+              // Match location at the end: City, State/Country or City, State, Country
+              // Pattern: matches capitalized words separated by commas and spaces at the end
+              const locationMatch = titleText.match(/([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?,\s*[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?(?:,\s*[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)?)$/);
+              const location = locationMatch ? locationMatch[1] : '';
+              const cleanTitle = location ? titleText.substring(0, titleText.lastIndexOf(location)).trim() : titleText;
+
+              return {
+                id: `sentry-${cleanTitle.toLowerCase().replace(/\s+/g, '-')}`,
+                company: 'Sentry',
+                title: cleanTitle,
+                team: '',
+                location: location,
+                posted: new Date().toISOString(),
+                snippet: '',
+                url: job.url,
+                matched: false,
+                matchScore: 0
+              };
+            });
 
           // Validate jobs
           const validatedJobs = rawJobs
@@ -1053,18 +777,29 @@ async function safeScrape(scraperFn: () => Promise<Job[]>, companyName: string):
 async function scrapeOtherCompanies(): Promise<Job[]> {
   console.log('Scraping other companies with Playwright...');
 
-  // Run all scrapers in parallel with safety wrappers (use default limits of 500)
-  const results = await Promise.all([
-    safeScrape(() => scrapeOpenAI(), 'OpenAI'),
-    safeScrape(() => scrapeAmazon(), 'Amazon'),
-    safeScrape(() => scrapeApple(), 'Apple'),
-    safeScrape(() => scrapeGlean(), 'Glean'),
-    safeScrape(() => scrapeGoogle(), 'Google'),
-    safeScrape(() => scrapeMeta(), 'Meta'),
-    safeScrape(() => scrapeSentry(), 'Sentry')
-  ]);
+  // Run JSearch API scrapers SEQUENTIALLY to avoid rate limiting
+  const jsearchCompanies = [
+    { fn: scrapeOpenAI, name: 'OpenAI' },
+    { fn: scrapeAmazon, name: 'Amazon' },
+    { fn: scrapeApple, name: 'Apple' },
+    { fn: scrapeGlean, name: 'Glean' },
+    { fn: scrapeGoogle, name: 'Google' },
+    { fn: scrapeMeta, name: 'Meta' }
+  ];
 
-  return results.flat();
+  const allJobs: Job[] = [];
+
+  // Scrape JSearch companies one by one
+  for (const { fn, name } of jsearchCompanies) {
+    const jobs = await safeScrape(fn, name);
+    allJobs.push(...jobs);
+  }
+
+  // Sentry can run independently (uses Playwright, not JSearch)
+  const sentryJobs = await safeScrape(() => scrapeSentry(), 'Sentry');
+  allJobs.push(...sentryJobs);
+
+  return allJobs;
 }
 
 // Trigger job scraping
@@ -1115,12 +850,65 @@ app.post('/api/jobs/update', async (req, res) => {
       // Continue with empty array
     }
 
-    // Combine all jobs
-    let allJobs = [...greenhouseJobs, ...otherJobs];
-    console.log(`Total jobs scraped: ${allJobs.length}`);
+    // ✨ Load previous job data to merge with new data (preserve data for failed scrapes)
+    let previousJobs: Job[] = [];
+    try {
+      if (existsSync(DATA_FILE)) {
+        const previousData = await readFile(DATA_FILE, 'utf-8');
+        const parsed = JSON.parse(previousData);
+        previousJobs = parsed.jobs || [];
+      }
+    } catch (error) {
+      console.warn('Could not load previous job data:', error);
+    }
+
+    // Group new jobs by company
+    const newJobsByCompany = new Map<string, Job[]>();
+    for (const job of [...greenhouseJobs, ...otherJobs]) {
+      if (!newJobsByCompany.has(job.company)) {
+        newJobsByCompany.set(job.company, []);
+      }
+      newJobsByCompany.get(job.company)!.push(job);
+    }
+
+    // Group previous jobs by company
+    const previousJobsByCompany = new Map<string, Job[]>();
+    for (const job of previousJobs) {
+      if (!previousJobsByCompany.has(job.company)) {
+        previousJobsByCompany.set(job.company, []);
+      }
+      previousJobsByCompany.get(job.company)!.push(job);
+    }
+
+    // Merge strategy: use new data if available, otherwise keep old data
+    const allCompanies = new Set([
+      ...newJobsByCompany.keys(),
+      ...previousJobsByCompany.keys()
+    ]);
+
+    let allJobs: Job[] = [];
+    for (const company of allCompanies) {
+      const newJobs = newJobsByCompany.get(company) || [];
+      const oldJobs = previousJobsByCompany.get(company) || [];
+
+      if (newJobs.length > 0) {
+        // Successfully scraped new data - use it
+        allJobs.push(...newJobs);
+        console.log(`${company}: Using fresh data (${newJobs.length} jobs)`);
+      } else if (oldJobs.length > 0) {
+        // No new data but have old data - preserve it
+        allJobs.push(...oldJobs);
+        console.log(`${company}: Preserving cached data (${oldJobs.length} jobs) - scraping failed`);
+      } else {
+        // No data at all
+        console.log(`${company}: No data available`);
+      }
+    }
+
+    console.log(`Total jobs after merge: ${allJobs.length}`);
 
     if (allJobs.length === 0) {
-      console.warn('No jobs were scraped from any company');
+      console.warn('No jobs available (no new scrapes and no cached data)');
     }
 
     // Apply matching logic
