@@ -1056,19 +1056,19 @@ app.post('/api/jobs/update', async (req, res) => {
       allJobs = allJobs.map(job => ({ ...job, matched: false, matchScore: 0 }));
     }
 
-    // Filter to only matched jobs
-    const matchedJobs = allJobs.filter(job => job.matched);
-    console.log(`Matched jobs: ${matchedJobs.length} out of ${allJobs.length}`);
+    // Count matched jobs for stats
+    const matchedCount = allJobs.filter(job => job.matched).length;
+    console.log(`Matched jobs: ${matchedCount} out of ${allJobs.length}`);
 
     const endTime = Date.now();
     console.log(`Total scraping time: ${(endTime - startTime) / 1000}s`);
 
     const result = {
-      jobs: matchedJobs,
+      jobs: allJobs, // Save ALL jobs with their match status
       lastUpdated: new Date().toISOString(),
       stats: {
         totalScraped: allJobs.length,
-        totalMatched: matchedJobs.length,
+        totalMatched: matchedCount,
         scrapingTimeMs: endTime - startTime
       }
     };
